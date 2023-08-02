@@ -1,0 +1,9 @@
+altair
+pandas
+streamlit
+pyodbc == 3.0.10
+streamlit_folium
+folium
+st_aggrid
+streamlit_option_menu
+supabase
