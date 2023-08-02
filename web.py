@@ -6,11 +6,6 @@ import streamlit.components.v1 as html
 from  PIL import Image
 import numpy as np
 import pandas as pd
-import plotly.express as px
-import folium
-import supabase as sb
-from supabase import create_client, Client
-from streamlit_folium import st_folium, folium_static
 title = """Từng đau khổ mới biết thế nào là đau khổ.\n
  Từng chấp trước mới có thể rũ bỏ được chấp trước.\n
    Từng vấn vương mới có thể không còn vấn vương!"""
