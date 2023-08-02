@@ -33,7 +33,7 @@ hide_streamlit_style = """
             """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True) 
 with st.sidebar:
-    choose = option_menu("BKLIGHT", ["Home", "Devices", "Controls", "Notifications", "Login"],
+    choose = option_menu("EVOL Space", ["Home", "About", "His-story", "Relax", "???"],
                          icons=['house', 'lightbulb', 'menu-button', 'bell','door-open'],
                          menu_icon="app-indicator", default_index=0,
                          styles={
@@ -47,10 +47,10 @@ with st.sidebar:
 if choose == "Home":
     col1, col2 = st.columns( [0.5, 0.5])
   
-elif choose == "Devices":
+elif choose == "About":
     Lights = pd.DataFrame([[21.0043061,105.8373198],[21.0004175,105.839110],[20.9975346,105.844127]], columns= ['lat','lon'])
     
-elif choose == "Controls":
+elif choose == "His-story":
     choose
-elif choose == "Login":    
+elif choose == "Relax":    
     choose
