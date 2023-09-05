@@ -29,7 +29,7 @@ hide_streamlit_style = """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True) 
 with st.sidebar:
     choose = option_menu("EVOL Space", ["Home", "About", "His-story", "Relax", "???"],
-                         icons=['house', 'lightbulb', 'menu-button', 'bell','door-open'],
+                         icons=['person-rolodex', 'lightbulb', 'menu-button', 'bell','door-open'],
                          menu_icon="app-indicator", default_index=0,
                          styles={
         "container": {"padding": "5!important", "background-color": "#0c0c0c"},
@@ -48,4 +48,4 @@ elif choose == "About":
 elif choose == "His-story":
     choose
 elif choose == "Relax":    
-    choose
+    st.info('This is a purely informational message', icon="ℹ️")
