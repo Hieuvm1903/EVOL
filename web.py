@@ -3,13 +3,13 @@ import pyodbc
 import streamlit as st
 from streamlit_option_menu import option_menu
 import streamlit.components.v1 as html
-from  PIL import Image
 import numpy as np
 import pandas as pd
-title = """Từng đau khổ mới biết thế nào là đau khổ.\n
- Từng chấp trước mới có thể rũ bỏ được chấp trước.\n
-   Từng vấn vương mới có thể không còn vấn vương!"""
-st.write(title)
+from image import *
+from music import *
+import music
+from data import *
+
 hide_streamlit_style = """
             <style>
             header {visibility: hidden;}
@@ -40,12 +40,25 @@ with st.sidebar:
     )
 
 if choose == "Home":
-    col1, col2 = st.columns( [0.5, 0.5])
-  
+    """
+    Từng đau khổ mới biết thế nào là đau khổ.\n
+    Từng chấp trước mới có thể rũ bỏ được chấp trước.\n
+    Từng vấn vương mới có thể không còn vấn vương!"""
+    
 elif choose == "About":
-    Lights = pd.DataFrame([[21.0043061,105.8373198],[21.0004175,105.839110],[20.9975346,105.844127]], columns= ['lat','lon'])
+    print()
     
 elif choose == "His-story":
-    choose
-elif choose == "Relax":    
-    st.info('This is a purely informational message', icon="ℹ️")
+    music = music.music
+    for m in music:
+        st_player(m)
+elif choose == "Relax":  
+    s  = st.text_area('Tâm sự vào đây (Ẩn danh 100%)', '''
+        Dù sao cũng đã tới đây rồi tâm sự tí nhỉ
+    
+    ''')
+    def onclick():
+        write(s)
+    
+    st.button('Submit',key = 'submit',on_click= onclick)
+    
