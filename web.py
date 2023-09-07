@@ -46,16 +46,22 @@ if choose == "Home":
     Từng vấn vương mới có thể không còn vấn vương!"""
     
 elif choose == "About":
-    print()
+    facebook_page_url = 'https://www.facebook.com/evbinl/'
+
+# Define the HTML code to embed the Facebook page
+    iframe_code = f'<iframe src="{facebook_page_url}" width="500" height="800" style="border:none;"></iframe>'
+
+# Use the st.components.html component to display the iframe
+    st.components.v1.html(iframe_code, width=600, height=800)
     
 elif choose == "His-story":
     music = music.music
     for m in music:
-        st_player(m)
+        st.write(m[0])
+        st_player(m[1])
 elif choose == "Relax":  
     s  = st.text_area('Tâm sự vào đây (Ẩn danh 100%)', '''
-        Dù sao cũng đã tới đây rồi tâm sự tí nhỉ
-    
+        Dù sao cũng đã tới đây rồi tâm sự tí nhỉ    
     ''')
     def onclick():
         write("{"+s+"}")
