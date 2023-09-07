@@ -26,7 +26,7 @@ hide_streamlit_style = """
 }
             </style>
             """
-st.markdown(hide_streamlit_style, unsafe_allow_html=True) 
+#st.markdown(hide_streamlit_style, unsafe_allow_html=True) 
 facebook = '''<div id="fb-root"></div>
 <script async defer crossorigin="anonymous" 
 src="https://connect.facebook.net/vi_VN/sdk.js#xfbml=1&version=v17.0" nonce="biau90a1"></script>
