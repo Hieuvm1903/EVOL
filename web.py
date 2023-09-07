@@ -58,7 +58,7 @@ elif choose == "Relax":
     
     ''')
     def onclick():
-        write(s)
+        write("{"+s+"}")
     
     st.button('Submit',key = 'submit',on_click= onclick)
     

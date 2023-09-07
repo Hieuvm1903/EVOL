@@ -8,4 +8,5 @@ url = 'https://epzpserqnhbwfpfqaqmq.supabase.co'
 client = create_client(url,key)
 
 def write(s):
+    
     client.table('notes').insert({'content':s,'time':datetime.now().strftime('%Y-%m-%d %H:%M:%S')}).execute()
