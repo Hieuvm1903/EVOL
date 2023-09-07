@@ -7,5 +7,3 @@ folium
 streamlit_option_menu
 supabase
 streamlit_player
-time
-datetime
