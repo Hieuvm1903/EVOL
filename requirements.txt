@@ -6,3 +6,7 @@ streamlit_folium
 folium
 streamlit_option_menu
 supabase
+streamlit_player
+PIL
+time
+datetime
