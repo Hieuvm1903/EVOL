@@ -9,6 +9,7 @@ from image import *
 from music import *
 import music
 from data import *
+import pytz
 st.set_page_config(page_icon="random",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -30,25 +31,8 @@ hide_streamlit_style = """
             </style>
             """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True) 
-html.html(
-    """
-  <iframe src="https://www.facebook.com/plugins/post.php?href=https%3A%2F%2Fwww.facebook.com%2Fphoto%2F%3Ffbid%3D1423943031364508%26set%3Da.167615383663952&width=750&show_text=true&height=499&appId" 
-  width="700" height="499" style="border:none;overflow:hidden" scrolling="no" frameborder="0" allowfullscreen="true" allow="autoplay; clipboard-write; 
-  encrypted-media; picture-in-picture; web-share"></iframe>
+timezone = pytz.timezone("Asia/Ho_Chi_Minh")  # Replace with your desired timezone
 
-
-""",
-    height=520,width=1000
-)
-
-html.html("""
-          
-<div id="fb-root"></div>
-<script async defer crossorigin="anonymous" src="https://connect.facebook.net/vi_VN/sdk.js#xfbml=1&version=v18.0" nonce="wVt37LD5"></script>
-<div class="fb-comments" data-href="https://www.facebook.com/photo/?fbid=1423943031364508&amp;set=a.167615383663952https://www.facebook.com/photo/?fbid=1423943031364508&amp;set=a.167615383663952" data-width="750" data-numposts="5"></div>          
-
-""",
-    height=500,width=900)
 with st.sidebar:
     choose = option_menu("EVOL Space", ["Home", "About", "His-tory", "Relax", "???"],
                          icons=['person-rolodex', 'lightbulb', 'menu-button', 'bell','door-open'],
@@ -66,6 +50,23 @@ if choose == "Home":
     Từng đau khổ mới biết thế nào là đau khổ.\n
     Từng chấp trước mới có thể rũ bỏ được chấp trước.\n
     Từng vấn vương mới có thể không còn vấn vương!"""   
+    html.html(
+    """
+  <iframe src="https://www.facebook.com/plugins/post.php?href=https%3A%2F%2Fwww.facebook.com%2Fphoto%2F%3Ffbid%3D1423943031364508%26set%3Da.167615383663952&width=750&show_text=true&height=499&appId" 
+  width="700" height="400" style="border:none;overflow:hidden" scrolling="no" frameborder="0" allowfullscreen="true" allow="autoplay; clipboard-write; 
+  encrypted-media; picture-in-picture; web-share"></iframe>
+
+
+""",
+    height=400,width=700
+)
+
+    html.html("""
+          
+<div id="fb-root"></div>
+<script async defer crossorigin="anonymous" src="https://connect.facebook.net/vi_VN/sdk.js#xfbml=1&version=v18.0" nonce="UhxLsFD4"></script><div class="fb-comments" data-href="https://www.facebook.com/photo/?fbid=1423943031364508&amp;set=a.167615383663952https://www.facebook.com/photo/?fbid=1423943031364508&amp;set=a.167615383663952" data-width="750" data-numposts="5"></div>
+<div class="fb-comments" data-href="https://ev-l0-3.streamlit.app" data-width="750" data-numposts="5"></div>""",
+    height=300,width=900,scrolling= True)
 elif choose == "About":
     facebook_page_url = 'https://www.facebook.com/evbinl/'
 
@@ -85,6 +86,34 @@ elif choose == "Relax":
     ''')
     def onclick():
         write("{"+s+"}")
-    
+        st.rerun()
     st.button('Submit',key = 'submit',on_click= onclick)
-    
+    content = getwrite()
+    if  not content.empty:
+        content['time'] = pd.to_datetime(content["time"])
+        content['time'] = content.apply(lambda row: row['time'].astimezone(timezone), axis = 1)
+        df = content.sort_values(by='time',ascending=False)
+        st.write(df)
+elif choose == "???":
+    col1,col2 = st.columns([1,3])
+    with col1:
+
+        keys = st.text_input("Key???","/Evolut??n")
+    with col2:
+        s  = st.text_area('My thought', '''      
+    ''')  
+    btn = st.button('Submit',key = 'submit')
+    if btn:
+        if "/Evolut!0n" in keys:    
+            blog(s.strip())
+            st.success("Posted!!!")
+            st.rerun()
+        else:
+            st.warning("Don't ya remember it, EVOL?")
+    content = getblog()
+    if  not content.empty:
+        content['time'] = pd.to_datetime(content["time"])
+        content['time'] = content.apply(lambda row: row['time'].astimezone(timezone), axis = 1)
+
+        df = content.sort_values(by='time',ascending=False)
+        st.write(df)
