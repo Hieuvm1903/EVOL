@@ -9,7 +9,10 @@ from image import *
 from music import *
 import music
 from data import *
-
+st.set_page_config(page_icon="random",
+    layout="wide",
+    initial_sidebar_state="expanded",
+    )  
 hide_streamlit_style = """
             <style>
             header {visibility: hidden;}
@@ -26,15 +29,28 @@ hide_streamlit_style = """
 }
             </style>
             """
-#st.markdown(hide_streamlit_style, unsafe_allow_html=True) 
-facebook = '''<div id="fb-root"></div>
-<script async defer crossorigin="anonymous" 
-src="https://connect.facebook.net/vi_VN/sdk.js#xfbml=1&version=v17.0" nonce="biau90a1"></script>
-'''
-st.markdown(facebook, unsafe_allow_html=True) 
+st.markdown(hide_streamlit_style, unsafe_allow_html=True) 
+html.html(
+    """
+  <iframe src="https://www.facebook.com/plugins/post.php?href=https%3A%2F%2Fwww.facebook.com%2Fphoto%2F%3Ffbid%3D1423943031364508%26set%3Da.167615383663952&width=750&show_text=true&height=499&appId" 
+  width="700" height="499" style="border:none;overflow:hidden" scrolling="no" frameborder="0" allowfullscreen="true" allow="autoplay; clipboard-write; 
+  encrypted-media; picture-in-picture; web-share"></iframe>
 
+
+""",
+    height=520,width=1000
+)
+
+html.html("""
+          
+<div id="fb-root"></div>
+<script async defer crossorigin="anonymous" src="https://connect.facebook.net/vi_VN/sdk.js#xfbml=1&version=v18.0" nonce="wVt37LD5"></script>
+<div class="fb-comments" data-href="https://www.facebook.com/photo/?fbid=1423943031364508&amp;set=a.167615383663952https://www.facebook.com/photo/?fbid=1423943031364508&amp;set=a.167615383663952" data-width="750" data-numposts="5"></div>          
+
+""",
+    height=500,width=900)
 with st.sidebar:
-    choose = option_menu("EVOL Space", ["Home", "About", "His-story", "Relax", "???"],
+    choose = option_menu("EVOL Space", ["Home", "About", "His-tory", "Relax", "???"],
                          icons=['person-rolodex', 'lightbulb', 'menu-button', 'bell','door-open'],
                          menu_icon="app-indicator", default_index=0,
                          styles={
@@ -49,26 +65,15 @@ if choose == "Home":
     """
     Từng đau khổ mới biết thế nào là đau khổ.\n
     Từng chấp trước mới có thể rũ bỏ được chấp trước.\n
-    Từng vấn vương mới có thể không còn vấn vương!"""
-    
+    Từng vấn vương mới có thể không còn vấn vương!"""   
 elif choose == "About":
     facebook_page_url = 'https://www.facebook.com/evbinl/'
 
 # Define the HTML code to embed the Facebook page
-    iframe_code = f'''
-    <iframe src="https://www.facebook.com/plugins/like.php?href=https%3A%2F%2Fwww.facebook.com%2Fevbinl%2Fposts%2Fpfbid0jguB5YzNQGLDeP8TTub9CSLscowZupugdKsskHGpWLA1dokGhS7tCUoejLe4hXpTl&width=0&layout&action&size&share=true&height=35&appId" 
-    width="0" height="35" style="border:none;overflow:hidden" 
-    scrolling="no" frameborder="0" 
-    allowfullscreen="true" 
-    allow="autoplay; 
-    clipboard-write; 
-    encrypted-media; 
-    picture-in-picture; 
-    web-share"></iframe>
-    '''
 
-# Use the st.components.html component to display the iframe
-    html.html(iframe_code, width=600, height=800)
+
+
+    
 elif choose == "His-story":
     music = music.music
     for m in music:
