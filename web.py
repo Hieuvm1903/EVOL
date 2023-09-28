@@ -67,6 +67,7 @@ if choose == "Home":
 <script async defer crossorigin="anonymous" src="https://connect.facebook.net/vi_VN/sdk.js#xfbml=1&version=v18.0" nonce="UhxLsFD4"></script><div class="fb-comments" data-href="https://www.facebook.com/photo/?fbid=1423943031364508&amp;set=a.167615383663952https://www.facebook.com/photo/?fbid=1423943031364508&amp;set=a.167615383663952" data-width="750" data-numposts="5"></div>
 <div class="fb-comments" data-href="https://ev-l0-3.streamlit.app" data-width="750" data-numposts="5"></div>""",
     height=300,width=900,scrolling= True)
+    "---"
 elif choose == "About":
     facebook_page_url = 'https://www.facebook.com/evbinl/'
 
@@ -75,11 +76,24 @@ elif choose == "About":
 
 
     
-elif choose == "His-story":
-    music = music.music
-    for m in music:
-        st.write(m[0])
-        st_player(m[1])
+elif choose == "His-tory":
+    pop = music.music
+    anime = music.anime
+    bendy = music.bendy
+    tab1, tab2, tab3 = st.tabs(["Linh tinh", "Anime", "Bendy"])
+    with tab1:
+        for m in pop:
+            st.write(m[0])
+            st_player(m[1])
+    with tab2:
+        for m in anime:
+            st.write(m[0])
+            st_player(m[1])
+    with tab3:
+        for m in bendy:
+            st.write(m[0])
+            st_player(m[1])
+
 elif choose == "Relax":  
     s  = st.text_area('Tâm sự vào đây (Ẩn danh 100%)', '''
         Dù sao cũng đã tới đây rồi tâm sự tí nhỉ    
@@ -93,7 +107,7 @@ elif choose == "Relax":
         content['time'] = pd.to_datetime(content["time"])
         content['time'] = content.apply(lambda row: row['time'].astimezone(timezone), axis = 1)
         df = content.sort_values(by='time',ascending=False)
-        st.write(df)
+        #st.write(df)
 elif choose == "???":
     col1,col2 = st.columns([1,3])
     with col1:
@@ -116,4 +130,11 @@ elif choose == "???":
         content['time'] = content.apply(lambda row: row['time'].astimezone(timezone), axis = 1)
 
         df = content.sort_values(by='time',ascending=False)
-        st.write(df)
+        for row in df.iterrows():
+            s = row[1]['time'].strftime("%m/%d/%Y, %H:%M:%S")+row[1]['content']
+            "---"
+            st.write(s)
+        "---"   
+        
+
+        
