@@ -131,7 +131,7 @@ elif choose == "???":
 
         df = content.sort_values(by='time',ascending=False)
         for row in df.iterrows():
-            s = row[1]['time'].strftime("%m/%d/%Y, %H:%M:%S")+row[1]['content']
+            s = row[1]['time'].strftime("%m/%d/%Y, %H:%M:%S")+": "+row[1]['content']
             "---"
             st.write(s)
         "---"   
