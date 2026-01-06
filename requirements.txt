@@ -6,3 +6,4 @@ streamlit_folium
 folium
 streamlit_option_menu
 streamlit_player
+pillow
