@@ -1,6 +1,6 @@
 altair
 pandas
-streamlit
+streamlit>=1.23.0
 pyodbc == 3.0.10
 streamlit_folium
 folium
