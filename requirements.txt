@@ -5,5 +5,4 @@ pyodbc == 3.0.10
 streamlit_folium
 folium
 streamlit_option_menu
-supabase
 streamlit_player

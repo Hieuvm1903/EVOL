@@ -96,7 +96,7 @@ elif choose == "His-tory":
 
 elif choose == "Relax":  
     s  = st.text_area('Tâm sự vào đây (Ẩn danh 100%)', '''
-        Dù sao cũng đã tới đây rồi tâm sự tí nhỉ    
+          
     ''')
     def onclick():
         write("{"+s+"}")
