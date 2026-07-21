@@ -1,7 +1,7 @@
 altair
 pandas
+numpy
 streamlit>=1.23.0
-pyodbc == 3.0.10
 streamlit_folium
 folium
 streamlit_option_menu

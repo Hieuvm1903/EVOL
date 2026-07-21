@@ -1,0 +1,97 @@
+import streamlit as st
+
+GLOBAL_CSS = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+html, body, [class*="css"]  {
+    font-family: 'Poppins', sans-serif;
+}
+
+header {visibility: hidden;}
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+footer:after {
+    content:'Made by EVOL';
+    visibility: visible;
+    display: block;
+    position: relative;
+    padding: 5px;
+    top: 2px;
+}
+
+.main .block-container {
+    padding-top: 2rem;
+    padding-bottom: 3rem;
+    max-width: 1100px;
+}
+
+h1, h2, h3 {
+    font-weight: 600;
+}
+
+.evol-card {
+    background: #161616;
+    border: 1px solid #2a2a2a;
+    border-radius: 14px;
+    padding: 16px 20px;
+    margin-bottom: 14px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+    transition: transform 0.15s ease, border-color 0.15s ease;
+}
+.evol-card:hover {
+    transform: translateY(-2px);
+    border-color: #02ab21;
+}
+.evol-card-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+.evol-card-meta {
+    font-size: 0.78rem;
+    color: #9a9a9a;
+    margin-bottom: 8px;
+}
+.evol-card-body {
+    font-size: 0.95rem;
+    color: #e6e6e6;
+    white-space: pre-wrap;
+}
+
+.stButton>button {
+    border-radius: 10px;
+    font-weight: 500;
+    border: 1px solid #02ab21;
+}
+.stButton>button:hover {
+    background-color: #02ab21;
+    color: white;
+    border-color: #02ab21;
+}
+
+div[data-testid="stExpander"] {
+    border-radius: 12px;
+    border: 1px solid #2a2a2a;
+}
+</style>
+"""
+
+
+def inject_global_css() -> None:
+    st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
+
+
+def render_card(title: str , meta: str, body: str) -> None:
+    """Reusable dark 'card' block used by Relax, the secret blog, and Places."""
+    title_html = f'<div class="evol-card-title">{title}</div>' if title else ""
+    st.markdown(
+        f"""
+        <div class="evol-card">
+            {title_html}
+            <div class="evol-card-meta">{meta}</div>
+            <div class="evol-card-body">{body}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )

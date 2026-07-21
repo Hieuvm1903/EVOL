@@ -1,0 +1,21 @@
+from datetime import datetime
+
+import pandas as pd
+
+from config import TIMEZONE
+from db.database import get_connection
+
+
+def add_note(content: str) -> None:
+    t = datetime.now().astimezone(tz=TIMEZONE).strftime("%Y-%m-%d %H:%M:%S %z")
+    conn = get_connection()
+    conn.execute("INSERT INTO notes (content, time) VALUES (?, ?)", (content, t))
+    conn.commit()
+    conn.close()
+
+
+def get_notes() -> pd.DataFrame:
+    conn = get_connection()
+    df = pd.read_sql_query("SELECT * FROM notes ORDER BY id DESC", conn)
+    conn.close()
+    return df
