@@ -3,7 +3,7 @@ from datetime import datetime
 import pandas as pd
 
 from config import TIMEZONE
-from db.database import get_connection
+from db.database import get_connection, push_db
 
 
 def add_note(content: str) -> None:
@@ -12,6 +12,7 @@ def add_note(content: str) -> None:
     conn.execute("INSERT INTO notes (content, time) VALUES (?, ?)", (content, t))
     conn.commit()
     conn.close()
+    push_db()
 
 
 def get_notes() -> pd.DataFrame:

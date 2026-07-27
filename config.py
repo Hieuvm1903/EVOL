@@ -6,8 +6,9 @@ APP_ICON = "🌙"
 TIMEZONE = pytz.timezone("Asia/Ho_Chi_Minh")  # Replace with your desired timezone
 
 # Sidebar navigation: label -> bootstrap icon name (streamlit-option-menu)
-MENU_OPTIONS = ["Home", "About", "His-tory", "Relax", "Map", "Photobooth", "???"]
-MENU_ICONS = ["person-rolodex", "lightbulb", "menu-button", "bell", "geo-alt", "camera", "door-open"]
+MENU_OPTIONS = ["Home", "Login", "Music", "About", "His-tory", "Relax", "Map", "Photobooth"]
+MENU_ICONS = ["person-rolodex", "box-arrow-in-right", "music-note-beamed", "lightbulb",
+              "menu-button", "bell", "geo-alt", "camera", "door-open"]
 
 # Secret key that unlocks the hidden "???" blog tab
 SECRET_KEY = "/Evolut!0n"

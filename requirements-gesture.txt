@@ -1,0 +1,14 @@
+# Optional: enables the "Gesture capture" mode on the Photobooth tab.
+# Install with: pip install -r requirements-gesture.txt
+#
+# These pull in compiled/Rust extensions (aiortc -> cryptography's _rust,
+# mediapipe, opencv) that can be finicky on some local Windows setups.
+# The app runs fine without this file — gesture mode just won't show up,
+# falling back to plain click-to-capture. Community Cloud (Linux) installs
+# these cleanly, so you can also just skip local install and only enable
+# gesture mode in the deployed app (add this file's contents to
+# requirements.txt before deploying).
+streamlit-webrtc
+mediapipe
+opencv-python-headless
+av

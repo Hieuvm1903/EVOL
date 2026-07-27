@@ -8,9 +8,25 @@ html, body, [class*="css"]  {
     font-family: 'Poppins', sans-serif;
 }
 
-header {visibility: hidden;}
+header[data-testid="stHeader"] {
+    background: transparent;
+}
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
+
+/* Sidebar collapse/expand toggle — kept visible, styled to match the theme */
+[data-testid="stExpandSidebarButton"],
+[data-testid="stSidebarCollapseButton"] {
+    visibility: visible !important;
+    background: #161616;
+    border: 1px solid #02ab21;
+    border-radius: 8px;
+    padding: 4px;
+}
+[data-testid="stExpandSidebarButton"] svg,
+[data-testid="stSidebarCollapseButton"] svg {
+    fill: #02ab21;
+}
 footer:after {
     content:'Made by EVOL';
     visibility: visible;
@@ -82,7 +98,7 @@ def inject_global_css() -> None:
     st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
 
 
-def render_card(title: str , meta: str, body: str) -> None:
+def render_card(title: str | None, meta: str, body: str) -> None:
     """Reusable dark 'card' block used by Relax, the secret blog, and Places."""
     title_html = f'<div class="evol-card-title">{title}</div>' if title else ""
     st.markdown(

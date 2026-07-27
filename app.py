@@ -1,7 +1,7 @@
 import streamlit as st
 
 from config import APP_ICON, APP_TITLE
-from ui.pages import about, history, home, map_page, photobooth, relax, secret
+from ui.pages import about, history, home, login, map_page, music, photobooth, relax, secret
 from ui.sidebar import render_sidebar
 from ui.styles import inject_global_css
 
@@ -15,12 +15,13 @@ inject_global_css()
 
 PAGES = {
     "Home": home.render,
+    "Login": login.render,
+    "Music": music.render,
     "About": about.render,
     "His-tory": history.render,
     "Relax": relax.render,
     "Map": map_page.render,
     "Photobooth": photobooth.render,
-    "???": secret.render,
 }
 
 with st.sidebar:

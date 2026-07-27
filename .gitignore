@@ -1,0 +1,5 @@
+.streamlit/secrets.toml
+data.db
+assets/photos/*
+!assets/photos/.gitkeep
+__pycache__/

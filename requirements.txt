@@ -7,3 +7,4 @@ folium
 streamlit_option_menu
 streamlit_player
 pillow
+boto3

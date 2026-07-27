@@ -6,24 +6,78 @@ from config import PHOTO_FILTERS, TIMEZONE
 from services import photos_service
 from utils.image_filters import apply_filter
 
+# Gesture capture needs streamlit-webrtc + mediapipe (+ opencv, av). These
+# pull in compiled/Rust extensions that can be finicky on some local Windows
+# setups. Import them lazily and fall back to click-only capture if they're
+# not importable, rather than crashing the whole app.
+try:
+    import cv2
+    from streamlit_webrtc import webrtc_streamer
+    from utils.gesture_capture import GestureCaptureProcessor, RTC_CONFIGURATION
+    GESTURE_CAPTURE_AVAILABLE = True
+except ImportError:
+    GESTURE_CAPTURE_AVAILABLE = False
+
+
+def _render_click_capture() -> None:
+    camera_photo = st.camera_input("Take a photo")
+    if camera_photo is not None:
+        st.session_state["photobooth_raw_image"] = Image.open(camera_photo)
+
+
+def _render_gesture_capture() -> None:
+    st.caption("🖐️ Hold an open palm up to the camera and keep it steady for about a second.")
+    ctx = webrtc_streamer(
+        key="gesture-photobooth",
+        video_processor_factory=GestureCaptureProcessor,
+        rtc_configuration=RTC_CONFIGURATION,
+        media_stream_constraints={"video": True, "audio": False},
+    )
+
+    if ctx.video_processor:
+        with ctx.video_processor.lock:
+            frame = ctx.video_processor.captured_frame
+            if frame is not None:
+                ctx.video_processor.captured_frame = None  # consume it
+                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                st.session_state["photobooth_raw_image"] = Image.fromarray(rgb)
+                st.toast("Captured! Scroll down to preview and save.")
+
 
 def _render_capture() -> None:
-    col1, col2 = st.columns([1, 1])
+    if GESTURE_CAPTURE_AVAILABLE:
+        mode = st.radio(
+            "Capture mode",
+            ["📷 Click to capture", "🖐️ Gesture capture (open palm)"],
+            horizontal=True,
+        )
+    else:
+        mode = "📷 Click to capture"
+        st.caption(
+            "🖐️ Gesture capture is disabled — the optional `streamlit-webrtc` / "
+            "`mediapipe` packages aren't installed (or failed to import). "
+            "See requirements-gesture.txt to enable it."
+        )
 
+    col1, col2 = st.columns([1, 1])
     with col1:
-        camera_photo = st.camera_input("Take a photo")
+        if mode == "📷 Click to capture":
+            _render_click_capture()
+        else:
+            _render_gesture_capture()
 
     with col2:
         filter_name = st.selectbox("Filter", PHOTO_FILTERS)
         caption = st.text_input("Caption (optional)")
 
-        if camera_photo is not None:
-            original = Image.open(camera_photo)
-            preview = apply_filter(original, filter_name)
+        raw_image = st.session_state.get("photobooth_raw_image")
+        if raw_image is not None:
+            preview = apply_filter(raw_image, filter_name)
             st.image(preview, caption="Preview", use_container_width=True)
 
             if st.button("💾 Save to gallery", key="save_photo"):
                 photos_service.save_photo(preview, caption.strip(), filter_name)
+                st.session_state["photobooth_raw_image"] = None
                 st.success("Saved!")
                 st.rerun()
 
@@ -43,8 +97,11 @@ def _render_gallery() -> None:
     cols = st.columns(3)
     for i, (_, row) in enumerate(photos_df.iterrows()):
         with cols[i % 3]:
-            path = photos_service.photo_path(row["filename"])
-            st.image(path, use_container_width=True)
+            source = photos_service.get_photo_source(row["filename"])
+            if source is not None:
+                st.image(source, use_container_width=True)
+            else:
+                st.warning("Photo file missing.")
             st.markdown(
                 f'<div class="evol-card-meta">{row["time"].strftime("%m/%d/%Y %H:%M")} · {row["filter"]}</div>',
                 unsafe_allow_html=True,
@@ -58,7 +115,7 @@ def _render_gallery() -> None:
 
 def render() -> None:
     st.markdown("## 📸 Photobooth")
-    st.caption("Snap a pic, add a filter, save it to your gallery.")
+    st.caption("Snap a pic — by clicking or with a gesture — add a filter, save it to your gallery.")
 
     _render_capture()
     st.markdown("---")

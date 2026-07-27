@@ -3,7 +3,7 @@ from datetime import datetime
 import pandas as pd
 
 from config import TIMEZONE
-from db.database import get_connection
+from db.database import get_connection, push_db
 
 
 def add_place(name: str, lat: float, lon: float, description: str, icon: str) -> None:
@@ -15,6 +15,7 @@ def add_place(name: str, lat: float, lon: float, description: str, icon: str) ->
     )
     conn.commit()
     conn.close()
+    push_db()
 
 
 def get_places() -> pd.DataFrame:
@@ -29,3 +30,4 @@ def delete_place(place_id: int) -> None:
     conn.execute("DELETE FROM places WHERE id = ?", (place_id,))
     conn.commit()
     conn.close()
+    push_db()
