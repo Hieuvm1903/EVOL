@@ -22,6 +22,7 @@ PAGES = {
     "Relax": relax.render,
     "Map": map_page.render,
     "Photobooth": photobooth.render,
+    "???": secret.render,
 }
 
 with st.sidebar:

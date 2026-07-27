@@ -8,3 +8,4 @@ streamlit_option_menu
 streamlit_player
 pillow
 boto3
+ytmusicapi

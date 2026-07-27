@@ -68,6 +68,17 @@ def create_playlist(user_id: int, name: str) -> None:
     push_db()
 
 
+def rename_playlist(playlist_id: int, new_name: str) -> None:
+    new_name = new_name.strip()
+    if not new_name:
+        return
+    conn = get_connection()
+    conn.execute("UPDATE playlists SET name = ? WHERE id = ?", (new_name, playlist_id))
+    conn.commit()
+    conn.close()
+    push_db()
+
+
 def get_playlists(user_id: int) -> pd.DataFrame:
     conn = get_connection()
     df = pd.read_sql_query(
@@ -131,3 +142,67 @@ def get_playlist_tracks(playlist_id: int) -> pd.DataFrame:
     )
     conn.close()
     return df
+
+
+def copy_playlist_tracks(source_playlist_id: int, target_playlist_id: int) -> int:
+    """Copy every track from source into target. Duplicates are skipped
+    automatically (add_track_to_playlist no-ops if already present).
+    Returns how many *new* tracks were actually added."""
+    source_tracks = get_playlist_tracks(source_playlist_id)
+    if source_tracks.empty:
+        return 0
+    existing_ids = set(get_playlist_tracks(target_playlist_id)["id"])
+    added = 0
+    for track_id in source_tracks["id"]:
+        if int(track_id) not in existing_ids:
+            add_track_to_playlist(target_playlist_id, int(track_id))
+            added += 1
+    return added
+
+
+def add_track_and_attach(
+    playlist_id: int,
+    url: str,
+    added_by: int,
+    known_title: str | None = None,
+    known_thumbnail: str | None = None,
+) -> tuple[bool, str, int | None]:
+    """Add a track to the library (reusing it if the video is already there)
+    and attach it to `playlist_id` in one step. `known_title`/`known_thumbnail`
+    let a caller that already has metadata (e.g. from search) skip the
+    oEmbed lookup add_track() would otherwise do."""
+    normalized = youtube.normalize_url(url)
+    if not normalized:
+        return False, "That doesn't look like a valid YouTube link.", None
+    video_id = youtube.extract_video_id(normalized)
+
+    conn = get_connection()
+    existing = conn.execute(
+        "SELECT id, title FROM tracks WHERE video_id = ?", (video_id,)
+    ).fetchone()
+
+    if existing:
+        track_id, title = existing
+        conn.close()
+    else:
+        if known_title:
+            title = known_title
+            thumbnail = known_thumbnail or ""
+        else:
+            meta = youtube.fetch_metadata(normalized)
+            title = meta.get("title") or "Untitled track"
+            thumbnail = meta.get("thumbnail_url", "")
+
+        t = datetime.now().astimezone(tz=TIMEZONE).strftime("%Y-%m-%d %H:%M:%S %z")
+        cur = conn.execute(
+            "INSERT INTO tracks (title, video_id, youtube_url, thumbnail_url, added_by, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (title, video_id, normalized, thumbnail, added_by, t),
+        )
+        track_id = cur.lastrowid
+        conn.commit()
+        conn.close()
+        push_db()
+
+    add_track_to_playlist(playlist_id, track_id)
+    return True, f'Added "{title}" to the playlist.', track_id

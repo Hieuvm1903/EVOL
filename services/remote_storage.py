@@ -65,7 +65,7 @@ def upload_bytes(key: str, data: bytes) -> None:
     client.put_object(Bucket=_bucket, Key=key, Body=data)
 
 
-def download_bytes(key: str) -> bytes :
+def download_bytes(key: str) -> bytes | None:
     if not _enabled():
         return None
     client = _get_client()
@@ -93,7 +93,7 @@ def upload_photo(filename: str, data: bytes) -> None:
     upload_bytes(f"photos/{filename}", data)
 
 
-def download_photo(filename: str) -> bytes :
+def download_photo(filename: str) -> bytes | None:
     return download_bytes(f"photos/{filename}")
 
 

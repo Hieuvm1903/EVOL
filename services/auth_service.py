@@ -15,7 +15,7 @@ from config import TIMEZONE
 from db.database import get_connection, push_db
 
 
-def _hash_password(password: str, salt = None) -> str:
+def _hash_password(password: str, salt: bytes | None = None) -> str:
     salt = salt or os.urandom(16)
     digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 100_000)
     return f"{salt.hex()}${digest.hex()}"
