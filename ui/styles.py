@@ -90,6 +90,23 @@ div[data-testid="stExpander"] {
     border-radius: 12px;
     border: 1px solid #2a2a2a;
 }
+
+/* Floating "Now Playing" drawer, pinned to the right edge of the viewport
+   so it stays visible (and playing) no matter which page/scroll position
+   you're at. Its own content decides collapsed-vs-expanded; this just
+   anchors the outer box. */
+.st-key-now_playing_drawer {
+    position: fixed;
+    top: 4.5rem;
+    right: 1.25rem;
+    z-index: 99;
+    width: 300px;
+}
+.st-key-now_playing_drawer iframe {
+    width: 100% !important;
+    border: none !important;
+    background: transparent !important;
+}
 </style>
 """
 

@@ -7,13 +7,14 @@ from ui.styles import render_card
 
 
 def render() -> None:
+    st.markdown("## :material/self_improvement: Relax")
     text = st.text_area("Tâm sự vào đây (Ẩn danh 100%)", "")
 
     def _submit():
         notes_service.add_note("{" + text + "}")
         st.rerun()
 
-    st.button("Submit", key="submit_note", on_click=_submit)
+    st.button("Submit", key="submit_note", icon=":material/send:", on_click=_submit)
 
     notes = notes_service.get_notes()
     if not notes.empty:

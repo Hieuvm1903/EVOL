@@ -9,7 +9,7 @@ from ui.styles import render_card
 
 
 def _render_add_form() -> None:
-    with st.expander("➕ Add a new place", expanded=False):
+    with st.expander("Add a new place", icon=":material/add_location:", expanded=False):
         col1, col2 = st.columns(2)
         with col1:
             place_name = st.text_input("Place name", placeholder="e.g. Hồ Gươm")
@@ -23,7 +23,7 @@ def _render_add_form() -> None:
             icon_color = st.selectbox("Color", PLACE_ICON_COLORS)
         place_desc = st.text_area("Description", placeholder="Why this place matters...")
 
-        if st.button("Save place", key="save_place"):
+        if st.button("Save place", key="save_place", icon=":material/save:"):
             if not coord_str.strip():
                 st.warning("Please paste coordinates first.")
                 return
@@ -81,13 +81,13 @@ def _render_list(places_df: pd.DataFrame) -> None:
                 body=row["description"] or "",
             )
         with c2:
-            if st.button("🗑️", key=f"del_{row['id']}"):
+            if st.button("", key=f"del_{row['id']}", icon=":material/delete:", help="Delete this place"):
                 places_service.delete_place(int(row["id"]))
                 st.rerun()
 
 
 def render() -> None:
-    st.markdown("## 📍 Places")
+    st.markdown("## :material/location_on: Places")
     st.caption("Save spots you care about — paste coordinates, add a description, pick an icon.")
 
     _render_add_form()

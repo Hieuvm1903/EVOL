@@ -54,6 +54,12 @@ SCHEMA = [
             password_hash TEXT NOT NULL,
             created_at TEXT NOT NULL
         )""",
+    """CREATE TABLE IF NOT EXISTS sessions (
+            token TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL
+        )""",
     """CREATE TABLE IF NOT EXISTS tracks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL,

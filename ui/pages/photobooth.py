@@ -75,7 +75,7 @@ def _render_capture() -> None:
             preview = apply_filter(raw_image, filter_name)
             st.image(preview, caption="Preview", use_container_width=True)
 
-            if st.button("💾 Save to gallery", key="save_photo"):
+            if st.button("Save to gallery", key="save_photo", icon=":material/save:"):
                 photos_service.save_photo(preview, caption.strip(), filter_name)
                 st.session_state["photobooth_raw_image"] = None
                 st.success("Saved!")
@@ -108,13 +108,13 @@ def _render_gallery() -> None:
             )
             if row["caption"]:
                 st.markdown(f'<div class="evol-card-body">{row["caption"]}</div>', unsafe_allow_html=True)
-            if st.button("🗑️ Delete", key=f"del_photo_{row['id']}"):
+            if st.button("Delete", key=f"del_photo_{row['id']}", icon=":material/delete:"):
                 photos_service.delete_photo(int(row["id"]))
                 st.rerun()
 
 
 def render() -> None:
-    st.markdown("## 📸 Photobooth")
+    st.markdown("## :material/photo_camera: Photobooth")
     st.caption("Snap a pic — by clicking or with a gesture — add a filter, save it to your gallery.")
 
     _render_capture()

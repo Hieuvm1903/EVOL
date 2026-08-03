@@ -13,7 +13,7 @@ def render() -> None:
     with col2:
         text = st.text_area("My thought", "")
 
-    if st.button("Submit", key="submit_secret"):
+    if st.button("Submit", key="submit_secret", icon=":material/send:"):
         if SECRET_KEY in key_input:
             blog_service.add_post(text.strip())
             st.success("Posted!!!")

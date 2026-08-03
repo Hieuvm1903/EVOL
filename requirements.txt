@@ -1,12 +1,11 @@
 altair
 pandas
 numpy
-streamlit>=1.23.0
+streamlit>=1.40.0
 streamlit_folium
 folium
-streamlit_option_menu
 streamlit_player
 pillow
 boto3
 ytmusicapi
-pytz
+streamlit-cookies-controller

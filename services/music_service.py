@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 
 import pandas as pd
@@ -74,6 +75,19 @@ def rename_playlist(playlist_id: int, new_name: str) -> None:
         return
     conn = get_connection()
     conn.execute("UPDATE playlists SET name = ? WHERE id = ?", (new_name, playlist_id))
+    conn.commit()
+    conn.close()
+    push_db()
+
+
+def rename_track(track_id: int, new_title: str) -> None:
+    """Renames the track in the shared library — it'll show the new title
+    everywhere this track appears, not just in the playlist you renamed it from."""
+    new_title = new_title.strip()
+    if not new_title:
+        return
+    conn = get_connection()
+    conn.execute("UPDATE tracks SET title = ? WHERE id = ?", (new_title, track_id))
     conn.commit()
     conn.close()
     push_db()
@@ -206,3 +220,95 @@ def add_track_and_attach(
 
     add_track_to_playlist(playlist_id, track_id)
     return True, f'Added "{title}" to the playlist.', track_id
+
+
+# ---------------------------------------------------------------------------
+# Export / import (share a playlist between accounts)
+# ---------------------------------------------------------------------------
+
+def _playlist_name(playlist_id: int) -> str:
+    conn = get_connection()
+    row = conn.execute("SELECT name FROM playlists WHERE id = ?", (playlist_id,)).fetchone()
+    conn.close()
+    return row[0] if row else "Untitled playlist"
+
+
+def export_playlist_json(playlist_id: int) -> str:
+    name = _playlist_name(playlist_id)
+    tracks = get_playlist_tracks(playlist_id)
+    payload = {
+        "playlist_name": name,
+        "tracks": [
+            {"title": t["title"], "youtube_url": t["youtube_url"]}
+            for _, t in tracks.iterrows()
+        ],
+    }
+    return json.dumps(payload, indent=2, ensure_ascii=False)
+
+
+def export_playlist_text(playlist_id: int) -> str:
+    name = _playlist_name(playlist_id)
+    tracks = get_playlist_tracks(playlist_id)
+    lines = [f"# {name}"]
+    for _, t in tracks.iterrows():
+        lines.append(f"{t['title']} - {t['youtube_url']}")
+    return "\n".join(lines)
+
+
+def import_playlist(user_id: int, raw: str) -> tuple[bool, str, int]:
+    """Parse JSON (as produced by export_playlist_json) or plain text
+    ('# Name' header + one 'Title - URL' per line), create a new playlist,
+    and add every track. Duplicates within the source are naturally
+    deduplicated by add_track_and_attach."""
+    raw = raw.strip()
+    if not raw:
+        return False, "Nothing to import.", 0
+
+    name = None
+    entries: list[tuple[str | None, str]] = []
+
+    parsed = None
+    try:
+        parsed = json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        parsed = None
+
+    if isinstance(parsed, dict) and "tracks" in parsed:
+        name = parsed.get("playlist_name") or "Imported playlist"
+        for t in parsed.get("tracks", []):
+            url = t.get("youtube_url") or t.get("url")
+            if url:
+                entries.append((t.get("title"), url))
+    else:
+        for line in raw.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            if line.startswith("#"):
+                if name is None:
+                    name = line.lstrip("#").strip()
+                continue
+            if " - " in line:
+                title, url = line.rsplit(" - ", 1)
+                entries.append((title.strip(), url.strip()))
+            else:
+                entries.append((None, line))
+
+    if not entries:
+        return False, "Couldn't find any tracks to import in that text.", 0
+
+    final_name = name or "Imported playlist"
+    create_playlist(user_id, final_name)
+    playlist_id = int(get_playlists(user_id).iloc[0]["id"])  # most recently created
+
+    added = 0
+    for title, url in entries:
+        ok, _msg, _track_id = add_track_and_attach(playlist_id, url, user_id, known_title=title)
+        if ok:
+            added += 1
+
+    if added == 0:
+        delete_playlist(playlist_id)
+        return False, "Couldn't import any valid tracks from that text.", 0
+
+    return True, f'Imported "{final_name}" with {added} track(s).', added
