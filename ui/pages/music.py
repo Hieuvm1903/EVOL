@@ -373,9 +373,7 @@ def render() -> None:
                     icon=":material/lock:")
         return
 
-    if not st.session_state.get("music_queue"):
-        st.info("Hit Play, Shuffle, or Repeat on a playlist — playback controls then "
-                 "appear in the sidebar and keep going as you browse.", icon=":material/info:")
+
 
     view = st.session_state.get("music_view", "list")
     if view == "detail" and st.session_state.get("music_selected_playlist_id"):

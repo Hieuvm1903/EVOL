@@ -92,21 +92,29 @@ div[data-testid="stExpander"] {
 }
 
 /* Floating "Now Playing" drawer, pinned to the right edge of the viewport
-   so it stays visible (and playing) no matter which page/scroll position
-   you're at. Its own content decides collapsed-vs-expanded; this just
-   anchors the outer box. */
+   by default. Left/top get overridden inline by drag JS once the user
+   moves it — that inline style wins over these defaults. */
 .st-key-now_playing_drawer {
     position: fixed;
     top: 4.5rem;
     right: 1.25rem;
-    z-index: 99;
+    z-index: 999;
     width: 300px;
+    will-change: transform;
+    transition: box-shadow 0.15s ease;
 }
+
 .st-key-now_playing_drawer iframe {
     width: 100% !important;
     border: none !important;
     background: transparent !important;
 }
+.st-key-now_playing_drawer.evol-dragging {
+    transition: none !important;
+    will-change: transform;
+    filter: drop-shadow(0 10px 26px rgba(0,0,0,0.55));
+}
+
 </style>
 """
 
