@@ -324,42 +324,42 @@ export default function NowPlaying({ queue, initialMode }: { queue: Track[]; ini
       );
     } catch { }
   }, []);
-// Re-clamp whenever the parent viewport resizes — e.g. opening/closing
-// DevTools, which shrinks/grows the actual page viewport without any
-// drag happening. Without this, a position baked in as raw px at drag-end
-// has no relationship to the viewport anymore, so it can end up
-// off-screen or just visually "wrong" the moment the viewport changes.
-useEffect(() => {
-  let parentWin: Window;
-  try { parentWin = window.parent; } catch { return; }
+  // Re-clamp whenever the parent viewport resizes — e.g. opening/closing
+  // DevTools, which shrinks/grows the actual page viewport without any
+  // drag happening. Without this, a position baked in as raw px at drag-end
+  // has no relationship to the viewport anymore, so it can end up
+  // off-screen or just visually "wrong" the moment the viewport changes.
+  useEffect(() => {
+    let parentWin: Window;
+    try { parentWin = window.parent; } catch { return; }
 
-  function reclamp() {
-    const el = getContainer();
-    if (!el) return;
-    // Only touch elements the user has actually dragged (i.e. left/top
-    // were explicitly set) — leave the default CSS-pinned corner alone
-    // otherwise, since that one already tracks the viewport via CSS.
-    if (!el.style.left || el.style.left === "") return;
-    const w = el.offsetWidth, h = el.offsetHeight;
-    const vw = parentWin.innerWidth, vh = parentWin.innerHeight;
-    const curLeft = parseFloat(el.style.left) || 0;
-    const curTop = parseFloat(el.style.top) || 0;
-    const clampedLeft = Math.min(Math.max(curLeft, 8), Math.max(8, vw - w - 8));
-    const clampedTop = Math.min(Math.max(curTop, 8), Math.max(8, vh - h - 8));
-    if (clampedLeft !== curLeft || clampedTop !== curTop) {
-      el.style.left = `${clampedLeft}px`;
-      el.style.top = `${clampedTop}px`;
-      savePos(clampedLeft, clampedTop);
+    function reclamp() {
+      const el = getContainer();
+      if (!el) return;
+      // Only touch elements the user has actually dragged (i.e. left/top
+      // were explicitly set) — leave the default CSS-pinned corner alone
+      // otherwise, since that one already tracks the viewport via CSS.
+      if (!el.style.left || el.style.left === "") return;
+      const w = el.offsetWidth, h = el.offsetHeight;
+      const vw = parentWin.innerWidth, vh = parentWin.innerHeight;
+      const curLeft = parseFloat(el.style.left) || 0;
+      const curTop = parseFloat(el.style.top) || 0;
+      const clampedLeft = Math.min(Math.max(curLeft, 8), Math.max(8, vw - w - 8));
+      const clampedTop = Math.min(Math.max(curTop, 8), Math.max(8, vh - h - 8));
+      if (clampedLeft !== curLeft || clampedTop !== curTop) {
+        el.style.left = `${clampedLeft}px`;
+        el.style.top = `${clampedTop}px`;
+        savePos(clampedLeft, clampedTop);
+      }
     }
-  }
 
-  try {
-    parentWin.addEventListener("resize", reclamp);
-    return () => parentWin.removeEventListener("resize", reclamp);
-  } catch {
-    return;
-  }
-}, []);
+    try {
+      parentWin.addEventListener("resize", reclamp);
+      return () => parentWin.removeEventListener("resize", reclamp);
+    } catch {
+      return;
+    }
+  }, []);
   // Track the raw mouse position purely within THIS document (the
   // component's own iframe) — that's the document mousemove/mouseup
   // reliably keeps firing on for the whole gesture, since the widget
@@ -477,24 +477,36 @@ useEffect(() => {
         {/* Both pill and panel stay mounted at all times — only CSS
             `display` toggles which is visible. That's what keeps #yt-main
             (and the YT player attached to it) alive across collapse. */}
-       <div
-            id="pill"
-            ref={pillNodeRef}
-            style={{ display: expanded ? "none" : "flex" }}
-            title="Drag to move · tap to expand"
-            onMouseDown={(e) => startDrag(e, () => toggleExpand(true))}
-            onTouchStart={(e) => startDrag(e, () => toggleExpand(true))}
-          >
-            <img id="pill-thumb" src={track.thumbnail_url || ""} alt="" />
-            <Typography.Text id="pill-title" ellipsis style={{ flex: 1, color: "#e6e6e6", fontSize: 12, fontWeight: 600 }}>
-              {track.title}
-            </Typography.Text>
+        <div
+          id="pill"
+          ref={pillNodeRef}
+          style={{ display: expanded ? "none" : "flex" }}
+          title="Drag to move · tap to expand"
+          onMouseDown={(e) => startDrag(e, () => toggleExpand(true))}
+          onTouchStart={(e) => startDrag(e, () => toggleExpand(true))}
+        >
+          <span className={`pill-eq${playing ? " pill-eq-playing" : ""}`} aria-hidden="true">
+            <span className="pill-eq-bar" />
+            <span className="pill-eq-bar" />
+            <span className="pill-eq-bar" />
+            <span className="pill-eq-bar" />
+          </span>
+          <Typography.Text id="pill-title" ellipsis style={{ flex: 1, color: "#e6e6e6", fontSize: 12, fontWeight: 600 }}>
+            {track.title}
+          </Typography.Text>
+          <span className="spin-disk-wrap spin-disk-sm">
+            <span
+              className={`spin-disk${playing ? " spin-disk-playing" : ""}`}
+              style={track.thumbnail_url ? { backgroundImage: `url(${track.thumbnail_url})` } : undefined}
+            />
             <Button
-              type="text" shape="circle" size="small" style={{ color: "#02ab21" }}
+              type="text" shape="circle" size="small"
+              style={{ color: "#02ab21", position: "relative", zIndex: 1 }}
               icon={playing ? <PauseCircleFilled /> : <PlayCircleFilled />}
               onClick={(e) => { e.stopPropagation(); togglePlayPause(); }}
             />
-          </div>
+          </span>
+        </div>
         <div id="panel" style={{ display: expanded ? "block" : "none" }}>
           <div
             className="panel-header"
@@ -531,11 +543,18 @@ useEffect(() => {
 
           <div id="controls-row">
             <Button shape="circle" icon={<StepBackwardOutlined />} onClick={() => advance(-1)} />
-            <Button
-              type="primary" shape="circle" size="large"
-              icon={playing ? <PauseCircleFilled /> : <PlayCircleFilled />}
-              onClick={togglePlayPause}
-            />
+            <span className="spin-disk-wrap spin-disk-lg">
+              <span
+                className={`spin-disk${playing ? " spin-disk-playing" : ""}`}
+                style={track.thumbnail_url ? { backgroundImage: `url(${track.thumbnail_url})` } : undefined}
+              />
+              <Button
+                type="primary" shape="circle" size="large"
+                style={{ position: "relative", zIndex: 1 }}
+                icon={playing ? <PauseCircleFilled /> : <PlayCircleFilled />}
+                onClick={togglePlayPause}
+              />
+            </span>
             <Button shape="circle" icon={<StepForwardOutlined />} onClick={() => advance(1)} />
           </div>
 

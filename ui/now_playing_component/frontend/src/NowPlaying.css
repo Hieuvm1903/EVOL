@@ -87,3 +87,74 @@ html, body { margin: 0 !important; padding: 0 !important; background: transparen
 .queue-thumb-empty { background: #1c1c1c; }
 .queue-title { flex: 1; font-size: 0.76rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; color: #e6e6e6; }
 .queue-now-badge { color: #02ab21; font-size: 0.68rem; flex-shrink: 0; }
+
+/* Spinning disk — sits behind the play/pause button as an art-backed
+   "vinyl" ring. Rotation is pure CSS (paused/running via a class), so it
+   costs nothing extra to drive from React — playing state is already
+   tracked. */
+.spin-disk-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.spin-disk-sm { width: 30px; height: 30px; }
+.spin-disk-lg { width: 48px; height: 48px; }
+
+.spin-disk {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background-color: #1a1a1a;
+  background-size: cover;
+  background-position: center;
+  border: 1px solid #02ab21;
+  box-shadow: inset 0 0 0 2px rgba(0,0,0,0.5);
+  animation: spin-disk-rotate 2.8s linear infinite;
+  animation-play-state: paused;
+  transition: opacity 0.15s ease;
+}
+.spin-disk-playing {
+  animation-play-state: running;
+}
+
+@keyframes spin-disk-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+/* Collapsed pill: an animated "equalizer" icon instead of the static
+   thumbnail — a few bars that bounce independently, classic "now playing"
+   affordance. Runs only while playing; frozen mid-bounce on pause rather
+   than resetting to a flat baseline, so resuming feels continuous. */
+.pill-eq {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: #000;
+  flex-shrink: 0;
+  padding: 6px 5px;
+  box-sizing: border-box;
+}
+.pill-eq-bar {
+  width: 3px;
+  background: #02ab21;
+  border-radius: 2px;
+  height: 30%;
+  animation-play-state: paused;
+  transform-origin: bottom;
+}
+.pill-eq-playing .pill-eq-bar { animation-play-state: running; }
+
+.pill-eq-bar:nth-child(1) { animation: eq-bounce-1 0.9s ease-in-out infinite; }
+.pill-eq-bar:nth-child(2) { animation: eq-bounce-2 0.75s ease-in-out infinite; }
+.pill-eq-bar:nth-child(3) { animation: eq-bounce-3 1.05s ease-in-out infinite; }
+.pill-eq-bar:nth-child(4) { animation: eq-bounce-2 0.65s ease-in-out infinite; }
+
+@keyframes eq-bounce-1 { 0%, 100% { height: 25%; } 50% { height: 90%; } }
+@keyframes eq-bounce-2 { 0%, 100% { height: 40%; } 50% { height: 100%; } }
+@keyframes eq-bounce-3 { 0%, 100% { height: 20%; } 50% { height: 70%; } }
