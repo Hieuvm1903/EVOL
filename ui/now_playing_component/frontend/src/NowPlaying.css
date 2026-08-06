@@ -1,14 +1,34 @@
 html, body { margin: 0 !important; padding: 0 !important; background: transparent !important; font-family: Poppins, sans-serif; }
 
+/* pill/panel must stay in normal document flow (no position:absolute) —
+   only one is ever visible at a time (via #pill-wrap's display), and the
+   wrapping rootRef div's scrollHeight (read by ResizeObserver in
+   NowPlaying.tsx) needs real, non-zero content to measure. Reintroducing
+   position:absolute here is exactly what makes the whole widget disappear
+   while playback continues uninterrupted underneath. */
+
+#pill-wrap {
+  padding: 2px; /* small safety margin around the pill's border/background */
+}
+
 #pill {
   display: flex; align-items: center; gap: 8px; width: 260px;
   background: #161616; border: 1px solid #02ab21; border-radius: 999px;
-  padding: 6px 10px; cursor: grab; box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+  padding: 6px 10px; cursor: grab;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.35);
   touch-action: none; user-select: none;
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  transition: border-color 0.12s ease, background 0.12s ease;
 }
-#pill:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,0,0,0.5); }
-#pill:active, #pill.react-draggable-dragging { cursor: grabbing; }
+#pill:hover {
+  /* border/background only — draws exactly on the box, can't extend past
+     it, so nothing here can get clipped regardless of iframe sizing.
+     Deliberately no box-shadow change on hover: box-shadow is paint-only
+     and never affects layout size, so it can't be measured and will
+     always clip inconsistently against a tightly-sized iframe. */
+  border-color: #3ddc57;
+  background: #1c1c1c;
+}
+#pill:active, #pill.evol-active { cursor: grabbing; }
 #pill img { width: 32px; height: 32px; border-radius: 6px; object-fit: cover; background: #000; flex-shrink: 0; }
 
 #panel {
@@ -21,18 +41,18 @@ html, body { margin: 0 !important; padding: 0 !important; background: transparen
   font-size: 0.75rem; color: #9a9a9a; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.03em;
   touch-action: none; user-select: none;
 }
-.panel-header:active, .panel-header.react-draggable-dragging { cursor: grabbing; }
+.panel-header:active, .panel-header.evol-active { cursor: grabbing; }
 .panel-header .drag-grip { font-size: 0.95rem; letter-spacing: -1px; color: #4a4a4a; }
 .panel-header .panel-title { flex: 1; }
 
 #unmute-banner { background:#02ab21; color:#fff; padding:5px 8px; border-radius:6px; margin-bottom:8px; cursor:pointer; text-align:center; font-weight:600; font-size:0.72rem; }
 #video-shell { position: relative; width: 100%; padding-top: 56.25%; border-radius: 10px; overflow: hidden; background: #000; }
-#yt-main { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+#yt-main { position: absolute; top: 0; left: 0; width: 100%; height: 100%; } /* this one is fine — its parent (#video-shell) is a positioned, sized box, so it's not the widget's own height contribution */
 #progress-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 0.68rem; color: #9a9a9a; }
 #progress-bar { flex: 1; height: 5px; background: #2a2a2a; border-radius: 3px; cursor: pointer; position: relative; }
 #progress-fill { position: absolute; left: 0; top: 0; height: 100%; background: #02ab21; border-radius: 3px; }
 #controls-row { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 10px; }
-#mode-row { display: flex; justify-content: center; margin-top: 10px; }
+#mode-row { display: flex; align-items: center; justify-content: center; margin-top: 10px; }
 
 #volume-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
 #volume-row .volume-slider { flex: 1; margin: 0; }
@@ -50,15 +70,10 @@ html, body { margin: 0 !important; padding: 0 !important; background: transparen
 .queue-list-wrapper.collapsed { max-height: 0; opacity: 0; }
 
 .queue-list { max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding-right: 2px; }
-
-/* Fancier scrollbar — thin, rounded, green-gradient thumb, matches theme */
 .queue-list { scrollbar-width: thin; scrollbar-color: #02ab21 #1c1c1c; }
 .queue-list::-webkit-scrollbar { width: 6px; }
 .queue-list::-webkit-scrollbar-track { background: #1c1c1c; border-radius: 4px; }
-.queue-list::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #02ab21, #017a17);
-  border-radius: 4px;
-}
+.queue-list::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #02ab21, #017a17); border-radius: 4px; }
 .queue-list::-webkit-scrollbar-thumb:hover { background: #02ab21; }
 
 .queue-row {

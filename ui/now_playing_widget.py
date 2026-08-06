@@ -3,6 +3,8 @@ from .now_playing_component import now_playing_widget
 
 
 def load_queue(tracks, mode: str) -> None:
+    if mode == "Shuffle":
+        tracks = tracks.sample(frac=1).reset_index(drop=True)
     st.session_state["music_queue"] = tracks.to_dict("records")
     st.session_state["music_mode"] = mode
 

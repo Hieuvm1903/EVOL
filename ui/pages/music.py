@@ -1,3 +1,5 @@
+import random
+
 import streamlit as st
 
 from services import music_service
@@ -61,7 +63,7 @@ def _play_from_list(playlist_id: int, mode: str) -> None:
     tracks = music_service.get_playlist_tracks(playlist_id)
     if tracks.empty:
         st.warning("This playlist is empty.")
-    else:
+    else:            
         _load_queue(tracks, mode)
         st.rerun()
 
