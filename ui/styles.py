@@ -10,6 +10,7 @@ html, body, [class*="css"]  {
 
 header[data-testid="stHeader"] {
     background: transparent;
+    z-index: 100; /* keep it below the drawer, which now sits above it */
 }
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
@@ -91,14 +92,13 @@ div[data-testid="stExpander"] {
     border: 1px solid #2a2a2a;
 }
 
-/* Floating "Now Playing" drawer, pinned to the right edge of the viewport
-   by default. Left/top get overridden inline by drag JS once the user
-   moves it — that inline style wins over these defaults. */
+
+
 .st-key-now_playing_drawer {
     position: fixed;
     top: 4.5rem;
     right: 1.25rem;
-    z-index: 999;
+    z-index: 999999; /* must clear Streamlit's own header/toolbar layer */
     width: 300px;
     will-change: transform;
     transition: box-shadow 0.15s ease;

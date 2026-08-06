@@ -324,7 +324,42 @@ export default function NowPlaying({ queue, initialMode }: { queue: Track[]; ini
       );
     } catch { }
   }, []);
+// Re-clamp whenever the parent viewport resizes — e.g. opening/closing
+// DevTools, which shrinks/grows the actual page viewport without any
+// drag happening. Without this, a position baked in as raw px at drag-end
+// has no relationship to the viewport anymore, so it can end up
+// off-screen or just visually "wrong" the moment the viewport changes.
+useEffect(() => {
+  let parentWin: Window;
+  try { parentWin = window.parent; } catch { return; }
 
+  function reclamp() {
+    const el = getContainer();
+    if (!el) return;
+    // Only touch elements the user has actually dragged (i.e. left/top
+    // were explicitly set) — leave the default CSS-pinned corner alone
+    // otherwise, since that one already tracks the viewport via CSS.
+    if (!el.style.left || el.style.left === "") return;
+    const w = el.offsetWidth, h = el.offsetHeight;
+    const vw = parentWin.innerWidth, vh = parentWin.innerHeight;
+    const curLeft = parseFloat(el.style.left) || 0;
+    const curTop = parseFloat(el.style.top) || 0;
+    const clampedLeft = Math.min(Math.max(curLeft, 8), Math.max(8, vw - w - 8));
+    const clampedTop = Math.min(Math.max(curTop, 8), Math.max(8, vh - h - 8));
+    if (clampedLeft !== curLeft || clampedTop !== curTop) {
+      el.style.left = `${clampedLeft}px`;
+      el.style.top = `${clampedTop}px`;
+      savePos(clampedLeft, clampedTop);
+    }
+  }
+
+  try {
+    parentWin.addEventListener("resize", reclamp);
+    return () => parentWin.removeEventListener("resize", reclamp);
+  } catch {
+    return;
+  }
+}, []);
   // Track the raw mouse position purely within THIS document (the
   // component's own iframe) — that's the document mousemove/mouseup
   // reliably keeps firing on for the whole gesture, since the widget
