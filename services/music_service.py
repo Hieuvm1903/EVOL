@@ -4,7 +4,7 @@ from datetime import datetime
 import pandas as pd
 
 from config import TIMEZONE
-from db.database import get_connection, push_db
+from db import sheets_db
 from utils import youtube
 
 
@@ -15,10 +15,8 @@ def add_track(url: str, title: str | None, added_by: int) -> tuple[bool, str]:
 
     video_id = youtube.extract_video_id(normalized)
 
-    conn = get_connection()
-    existing = conn.execute("SELECT id FROM tracks WHERE video_id = ?", (video_id,)).fetchone()
-    if existing:
-        conn.close()
+    tracks = sheets_db.read_all("tracks")
+    if not tracks.empty and (tracks["video_id"] == video_id).any():
         return False, "That track is already in the library."
 
     meta = youtube.fetch_metadata(normalized)
@@ -26,31 +24,27 @@ def add_track(url: str, title: str | None, added_by: int) -> tuple[bool, str]:
     thumbnail = meta.get("thumbnail_url", "")
 
     t = datetime.now().astimezone(tz=TIMEZONE).strftime("%Y-%m-%d %H:%M:%S %z")
-    conn.execute(
-        "INSERT INTO tracks (title, video_id, youtube_url, thumbnail_url, added_by, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
-        (final_title, video_id, normalized, thumbnail, added_by, t),
-    )
-    conn.commit()
-    conn.close()
-    push_db()
+    sheets_db.insert("tracks", {
+        "title": final_title,
+        "video_id": video_id,
+        "youtube_url": normalized,
+        "thumbnail_url": thumbnail,
+        "added_by": added_by,
+        "created_at": t,
+    })
     return True, f'Added "{final_title}" to your library.'
 
 
 def get_all_tracks() -> pd.DataFrame:
-    conn = get_connection()
-    df = pd.read_sql_query("SELECT * FROM tracks ORDER BY id DESC", conn)
-    conn.close()
+    df = sheets_db.read_all("tracks")
+    if not df.empty:
+        df = df.sort_values("id", ascending=False)
     return df
 
 
 def delete_track(track_id: int) -> None:
-    conn = get_connection()
-    conn.execute("DELETE FROM tracks WHERE id = ?", (track_id,))
-    conn.execute("DELETE FROM playlist_tracks WHERE track_id = ?", (track_id,))
-    conn.commit()
-    conn.close()
-    push_db()
+    sheets_db.delete("tracks", track_id)
+    sheets_db.delete_where("playlist_tracks", "track_id", track_id)
 
 
 # ---------------------------------------------------------------------------
@@ -59,25 +53,18 @@ def delete_track(track_id: int) -> None:
 
 def create_playlist(user_id: int, name: str) -> None:
     t = datetime.now().astimezone(tz=TIMEZONE).strftime("%Y-%m-%d %H:%M:%S %z")
-    conn = get_connection()
-    conn.execute(
-        "INSERT INTO playlists (user_id, name, created_at) VALUES (?, ?, ?)",
-        (user_id, name.strip() or "Untitled playlist", t),
-    )
-    conn.commit()
-    conn.close()
-    push_db()
+    sheets_db.insert("playlists", {
+        "user_id": user_id,
+        "name": name.strip() or "Untitled playlist",
+        "created_at": t,
+    })
 
 
 def rename_playlist(playlist_id: int, new_name: str) -> None:
     new_name = new_name.strip()
     if not new_name:
         return
-    conn = get_connection()
-    conn.execute("UPDATE playlists SET name = ? WHERE id = ?", (new_name, playlist_id))
-    conn.commit()
-    conn.close()
-    push_db()
+    sheets_db.update("playlists", playlist_id, {"name": new_name})
 
 
 def rename_track(track_id: int, new_title: str) -> None:
@@ -86,76 +73,61 @@ def rename_track(track_id: int, new_title: str) -> None:
     new_title = new_title.strip()
     if not new_title:
         return
-    conn = get_connection()
-    conn.execute("UPDATE tracks SET title = ? WHERE id = ?", (new_title, track_id))
-    conn.commit()
-    conn.close()
-    push_db()
+    sheets_db.update("tracks", track_id, {"title": new_title})
 
 
 def get_playlists(user_id: int) -> pd.DataFrame:
-    conn = get_connection()
-    df = pd.read_sql_query(
-        "SELECT * FROM playlists WHERE user_id = ? ORDER BY id DESC", conn, params=(user_id,)
-    )
-    conn.close()
-    return df
+    df = sheets_db.read_all("playlists")
+    if df.empty:
+        return df
+    df = df[df["user_id"] == user_id]
+    return df.sort_values("id", ascending=False)
 
 
 def delete_playlist(playlist_id: int) -> None:
-    conn = get_connection()
-    conn.execute("DELETE FROM playlists WHERE id = ?", (playlist_id,))
-    conn.execute("DELETE FROM playlist_tracks WHERE playlist_id = ?", (playlist_id,))
-    conn.commit()
-    conn.close()
-    push_db()
+    sheets_db.delete("playlists", playlist_id)
+    sheets_db.delete_where("playlist_tracks", "playlist_id", playlist_id)
 
 
 def add_track_to_playlist(playlist_id: int, track_id: int) -> None:
-    conn = get_connection()
-    existing = conn.execute(
-        "SELECT id FROM playlist_tracks WHERE playlist_id = ? AND track_id = ?",
-        (playlist_id, track_id),
-    ).fetchone()
-    if existing:
-        conn.close()
-        return
-    max_pos = conn.execute(
-        "SELECT COALESCE(MAX(position), -1) FROM playlist_tracks WHERE playlist_id = ?",
-        (playlist_id,),
-    ).fetchone()[0]
+    pt = sheets_db.read_all("playlist_tracks")
+    max_pos = -1
+    if not pt.empty:
+        existing = pt[(pt["playlist_id"] == playlist_id) & (pt["track_id"] == track_id)]
+        if not existing.empty:
+            return
+        same_playlist = pt[pt["playlist_id"] == playlist_id]
+        if not same_playlist.empty:
+            max_pos = int(same_playlist["position"].max())
+
     t = datetime.now().astimezone(tz=TIMEZONE).strftime("%Y-%m-%d %H:%M:%S %z")
-    conn.execute(
-        "INSERT INTO playlist_tracks (playlist_id, track_id, position, added_at) VALUES (?, ?, ?, ?)",
-        (playlist_id, track_id, max_pos + 1, t),
-    )
-    conn.commit()
-    conn.close()
-    push_db()
+    sheets_db.insert("playlist_tracks", {
+        "playlist_id": playlist_id,
+        "track_id": track_id,
+        "position": max_pos + 1,
+        "added_at": t,
+    })
 
 
 def remove_track_from_playlist(playlist_id: int, track_id: int) -> None:
-    conn = get_connection()
-    conn.execute(
-        "DELETE FROM playlist_tracks WHERE playlist_id = ? AND track_id = ?",
-        (playlist_id, track_id),
-    )
-    conn.commit()
-    conn.close()
-    push_db()
+    pt = sheets_db.read_all("playlist_tracks")
+    if pt.empty:
+        return
+    match = pt[(pt["playlist_id"] == playlist_id) & (pt["track_id"] == track_id)]
+    for pt_id in match["id"].tolist():
+        sheets_db.delete("playlist_tracks", int(pt_id))
 
 
 def get_playlist_tracks(playlist_id: int) -> pd.DataFrame:
-    conn = get_connection()
-    df = pd.read_sql_query(
-        """SELECT t.*, pt.position FROM playlist_tracks pt
-           JOIN tracks t ON t.id = pt.track_id
-           WHERE pt.playlist_id = ?
-           ORDER BY pt.position ASC""",
-        conn, params=(playlist_id,),
-    )
-    conn.close()
-    return df
+    pt = sheets_db.read_all("playlist_tracks")
+    tracks = sheets_db.read_all("tracks")
+    if pt.empty or tracks.empty:
+        return pd.DataFrame(columns=list(sheets_db.SCHEMA["tracks"]) + ["position"])
+
+    pt = pt[pt["playlist_id"] == playlist_id].sort_values("position")
+    merged = pt.merge(tracks, left_on="track_id", right_on="id", suffixes=("_pt", ""))
+    cols = list(tracks.columns) + ["position"]
+    return merged[cols].reset_index(drop=True)
 
 
 def copy_playlist_tracks(source_playlist_id: int, target_playlist_id: int) -> int:
@@ -190,14 +162,12 @@ def add_track_and_attach(
         return False, "That doesn't look like a valid YouTube link.", None
     video_id = youtube.extract_video_id(normalized)
 
-    conn = get_connection()
-    existing = conn.execute(
-        "SELECT id, title FROM tracks WHERE video_id = ?", (video_id,)
-    ).fetchone()
+    tracks = sheets_db.read_all("tracks")
+    existing = tracks[tracks["video_id"] == video_id] if not tracks.empty else tracks
 
-    if existing:
-        track_id, title = existing
-        conn.close()
+    if existing is not None and not existing.empty:
+        track_id = int(existing.iloc[0]["id"])
+        title = existing.iloc[0]["title"]
     else:
         if known_title:
             title = known_title
@@ -208,15 +178,15 @@ def add_track_and_attach(
             thumbnail = meta.get("thumbnail_url", "")
 
         t = datetime.now().astimezone(tz=TIMEZONE).strftime("%Y-%m-%d %H:%M:%S %z")
-        cur = conn.execute(
-            "INSERT INTO tracks (title, video_id, youtube_url, thumbnail_url, added_by, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (title, video_id, normalized, thumbnail, added_by, t),
-        )
-        track_id = cur.lastrowid
-        conn.commit()
-        conn.close()
-        push_db()
+        new_row = sheets_db.insert("tracks", {
+            "title": title,
+            "video_id": video_id,
+            "youtube_url": normalized,
+            "thumbnail_url": thumbnail,
+            "added_by": added_by,
+            "created_at": t,
+        })
+        track_id = new_row["id"]
 
     add_track_to_playlist(playlist_id, track_id)
     return True, f'Added "{title}" to the playlist.', track_id
@@ -227,10 +197,9 @@ def add_track_and_attach(
 # ---------------------------------------------------------------------------
 
 def _playlist_name(playlist_id: int) -> str:
-    conn = get_connection()
-    row = conn.execute("SELECT name FROM playlists WHERE id = ?", (playlist_id,)).fetchone()
-    conn.close()
-    return row[0] if row else "Untitled playlist"
+    playlists = sheets_db.read_all("playlists")
+    match = playlists[playlists["id"] == playlist_id] if not playlists.empty else playlists
+    return match.iloc[0]["name"] if match is not None and not match.empty else "Untitled playlist"
 
 
 def export_playlist_json(playlist_id: int) -> str:

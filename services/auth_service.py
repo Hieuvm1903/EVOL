@@ -6,9 +6,9 @@ dependency) with a random salt per user.
 
 Login state is kept two ways:
   - st.session_state["user"] — fast, in-memory, cleared on a hard reload.
-  - A `sessions` DB row + a same-named token in a browser cookie
-    (via streamlit-cookies-controller) — survives reloads/new tabs, expires
-    after 30 days or on explicit logout.
+  - A `sessions` row in Sheets (keyed by its `token` column) + a same-named
+    token in a browser cookie (via streamlit-cookies-controller) — survives
+    reloads/new tabs, expires after 30 days or on explicit logout.
 """
 import hashlib
 import os
@@ -19,7 +19,7 @@ import streamlit as st
 from streamlit_cookies_controller import CookieController
 
 from config import TIMEZONE
-from db.database import get_connection, push_db
+from db import sheets_db
 
 COOKIE_NAME = "evol_session"
 SESSION_LIFETIME_DAYS = 30
@@ -48,31 +48,29 @@ def register_user(username: str, password: str) -> tuple[bool, str]:
     if len(password) < 4:
         return False, "Password must be at least 4 characters."
 
-    conn = get_connection()
-    existing = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
-    if existing:
-        conn.close()
+    users = sheets_db.read_all("users")
+    if not users.empty and (users["username"] == username).any():
         return False, "That username is already taken."
 
     t = datetime.now().astimezone(tz=TIMEZONE).strftime("%Y-%m-%d %H:%M:%S %z")
-    conn.execute(
-        "INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)",
-        (username, _hash_password(password), t),
-    )
-    conn.commit()
-    conn.close()
-    push_db()
+    sheets_db.insert("users", {
+        "username": username,
+        "password_hash": _hash_password(password),
+        "created_at": t,
+    })
     return True, "Account created — you can log in now."
 
 
 def verify_user(username: str, password: str) -> dict | None:
-    conn = get_connection()
-    row = conn.execute(
-        "SELECT id, username, password_hash FROM users WHERE username = ?", (username.strip(),)
-    ).fetchone()
-    conn.close()
-    if row and _verify_password(password, row[2]):
-        return {"id": row[0], "username": row[1]}
+    users = sheets_db.read_all("users")
+    if users.empty:
+        return None
+    match = users[users["username"] == username.strip()]
+    if match.empty:
+        return None
+    row = match.iloc[0]
+    if _verify_password(password, row["password_hash"]):
+        return {"id": int(row["id"]), "username": row["username"]}
     return None
 
 
@@ -94,45 +92,43 @@ def create_session(user_id: int) -> str:
     token = secrets.token_urlsafe(32)
     now = _now()
     expires = now + timedelta(days=SESSION_LIFETIME_DAYS)
-    conn = get_connection()
-    conn.execute(
-        "INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
-        (token, user_id, now.strftime("%Y-%m-%d %H:%M:%S %z"), expires.strftime("%Y-%m-%d %H:%M:%S %z")),
-    )
-    conn.commit()
-    conn.close()
-    push_db()
+    sheets_db.insert("sessions", {
+        "token": token,
+        "user_id": user_id,
+        "created_at": now.strftime("%Y-%m-%d %H:%M:%S %z"),
+        "expires_at": expires.strftime("%Y-%m-%d %H:%M:%S %z"),
+    })
     return token
 
 
 def _get_user_by_session(token: str) -> dict | None:
-    conn = get_connection()
-    row = conn.execute(
-        """SELECT u.id, u.username, s.expires_at FROM sessions s
-           JOIN users u ON u.id = s.user_id
-           WHERE s.token = ?""",
-        (token,),
-    ).fetchone()
-    conn.close()
-    if not row:
+    sessions = sheets_db.read_all("sessions")
+    if sessions.empty:
         return None
+    match = sessions[sessions["token"] == token]
+    if match.empty:
+        return None
+    row = match.iloc[0]
+
     try:
-        expires_at = datetime.strptime(row[2], "%Y-%m-%d %H:%M:%S %z")
+        expires_at = datetime.strptime(row["expires_at"], "%Y-%m-%d %H:%M:%S %z")
     except (ValueError, TypeError):
         delete_session(token)
         return None
     if expires_at < _now():
         delete_session(token)
         return None
-    return {"id": row[0], "username": row[1]}
+
+    users = sheets_db.read_all("users")
+    user_match = users[users["id"] == int(row["user_id"])] if not users.empty else users
+    if user_match is None or user_match.empty:
+        return None
+    user_row = user_match.iloc[0]
+    return {"id": int(user_row["id"]), "username": user_row["username"]}
 
 
 def delete_session(token: str) -> None:
-    conn = get_connection()
-    conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
-    conn.commit()
-    conn.close()
-    push_db()
+    sheets_db.delete("sessions", token)
 
 
 def remember_login(user: dict) -> None:

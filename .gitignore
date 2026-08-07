@@ -4,3 +4,4 @@ assets/photos/*
 !assets/photos/.gitkeep
 __pycache__/
 ui/now_playing_component/frontend/node_modules
+credentials.json

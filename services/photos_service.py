@@ -1,18 +1,18 @@
-import io
 import os
+import io
 import uuid
 from datetime import datetime
 
 import pandas as pd
 from PIL import Image
 
-from config import TIMEZONE
-from db.database import get_connection, push_db, PHOTOS_DIR
+from config import PHOTOS_DIR, TIMEZONE
+from db import sheets_db
 from services import remote_storage
 
 
 def save_photo(image: Image.Image, caption: str, filter_name: str) -> None:
-    """Upload a filtered photo to R2 (if configured) and record it in the DB.
+    """Upload a filtered photo to R2 (if configured) and record it in Sheets.
 
     Also writes a local copy to PHOTOS_DIR so the gallery has something to
     read immediately in the same session, without a round-trip download.
@@ -30,20 +30,18 @@ def save_photo(image: Image.Image, caption: str, filter_name: str) -> None:
     remote_storage.upload_photo(filename, photo_bytes)
 
     t = datetime.now().astimezone(tz=TIMEZONE).strftime("%Y-%m-%d %H:%M:%S %z")
-    conn = get_connection()
-    conn.execute(
-        "INSERT INTO photos (filename, caption, filter, time) VALUES (?, ?, ?, ?)",
-        (filename, caption, filter_name, t),
-    )
-    conn.commit()
-    conn.close()
-    push_db()
+    sheets_db.insert("photos", {
+        "filename": filename,
+        "caption": caption,
+        "filter": filter_name,
+        "time": t,
+    })
 
 
 def get_photos() -> pd.DataFrame:
-    conn = get_connection()
-    df = pd.read_sql_query("SELECT * FROM photos ORDER BY id DESC", conn)
-    conn.close()
+    df = sheets_db.read_all("photos")
+    if not df.empty:
+        df = df.sort_values("id", ascending=False)
     return df
 
 
@@ -64,15 +62,13 @@ def get_photo_source(filename: str):
 
 
 def delete_photo(photo_id: int) -> None:
-    conn = get_connection()
-    row = conn.execute("SELECT filename FROM photos WHERE id = ?", (photo_id,)).fetchone()
-    conn.execute("DELETE FROM photos WHERE id = ?", (photo_id,))
-    conn.commit()
-    conn.close()
-    push_db()
+    photos = sheets_db.read_all("photos")
+    match = photos[photos["id"] == photo_id] if not photos.empty else photos
 
-    if row:
-        filename = row[0]
+    sheets_db.delete("photos", photo_id)
+
+    if match is not None and not match.empty:
+        filename = match.iloc[0]["filename"]
         local_path = os.path.join(PHOTOS_DIR, filename)
         if os.path.exists(local_path):
             os.remove(local_path)

@@ -3,31 +3,27 @@ from datetime import datetime
 import pandas as pd
 
 from config import TIMEZONE
-from db.database import get_connection, push_db
+from db import sheets_db
 
 
 def add_place(name: str, lat: float, lon: float, description: str, icon: str) -> None:
     t = datetime.now().astimezone(tz=TIMEZONE).strftime("%Y-%m-%d %H:%M:%S %z")
-    conn = get_connection()
-    conn.execute(
-        "INSERT INTO places (name, lat, lon, description, icon, time) VALUES (?, ?, ?, ?, ?, ?)",
-        (name, lat, lon, description, icon, t),
-    )
-    conn.commit()
-    conn.close()
-    push_db()
+    sheets_db.insert("places", {
+        "name": name,
+        "lat": lat,
+        "lon": lon,
+        "description": description,
+        "icon": icon,
+        "time": t,
+    })
 
 
 def get_places() -> pd.DataFrame:
-    conn = get_connection()
-    df = pd.read_sql_query("SELECT * FROM places ORDER BY id DESC", conn)
-    conn.close()
+    df = sheets_db.read_all("places")
+    if not df.empty:
+        df = df.sort_values("id", ascending=False)
     return df
 
 
 def delete_place(place_id: int) -> None:
-    conn = get_connection()
-    conn.execute("DELETE FROM places WHERE id = ?", (place_id,))
-    conn.commit()
-    conn.close()
-    push_db()
+    sheets_db.delete("places", place_id)

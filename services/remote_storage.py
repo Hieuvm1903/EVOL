@@ -1,4 +1,6 @@
-"""Cloudflare R2 storage client.
+"""Cloudflare R2 storage client — now used only for photos, since the
+relational data lives in Google Sheets (see db/sheets_db.py) instead of a
+synced SQLite file.
 
 R2 is S3-compatible, so we talk to it with boto3 using an R2-specific
 endpoint. Credentials are never hard-coded — they're read from Streamlit
@@ -12,12 +14,9 @@ Community Cloud's app settings):
     bucket = "evol-space"
 
 If no [r2] secrets are configured, every function in this module becomes a
-no-op / returns None, so the app still runs locally on plain local files —
-it only "goes remote" once you've set up R2.
+no-op / returns None, so the app still runs locally on plain local photo
+files — it only "goes remote" once you've set up R2.
 """
-import io
-import os
-
 import boto3
 import streamlit as st
 from botocore.client import Config
@@ -99,26 +98,3 @@ def download_photo(filename: str) -> bytes | None:
 
 def delete_photo(filename: str) -> None:
     delete_object(f"photos/{filename}")
-
-
-# ---------------------------------------------------------------------------
-# SQLite file sync (whole-file, fine for a low-write personal app)
-# ---------------------------------------------------------------------------
-
-DB_KEY = "data.db"
-
-
-def pull_db(local_path: str) -> None:
-    """Download the latest data.db from R2 to local_path, if one exists remotely."""
-    data = download_bytes(DB_KEY)
-    if data is not None:
-        with open(local_path, "wb") as f:
-            f.write(data)
-
-
-def push_db(local_path: str) -> None:
-    """Upload the current local data.db to R2."""
-    if not _enabled() or not os.path.exists(local_path):
-        return
-    with open(local_path, "rb") as f:
-        upload_bytes(DB_KEY, f.read())

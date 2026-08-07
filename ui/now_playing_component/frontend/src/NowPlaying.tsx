@@ -485,11 +485,11 @@ export default function NowPlaying({ queue, initialMode }: { queue: Track[]; ini
           onMouseDown={(e) => startDrag(e, () => toggleExpand(true))}
           onTouchStart={(e) => startDrag(e, () => toggleExpand(true))}
         >
-          <span className={`pill-eq${playing ? " pill-eq-playing" : ""}`} aria-hidden="true">
-            <span className="pill-eq-bar" />
-            <span className="pill-eq-bar" />
-            <span className="pill-eq-bar" />
-            <span className="pill-eq-bar" />
+          <span className="pill-eq" aria-hidden="true">
+            <span className="pill-eq-bar" style={{ animationPlayState: playing ? "running" : "paused" }} />
+            <span className="pill-eq-bar" style={{ animationPlayState: playing ? "running" : "paused" }} />
+            <span className="pill-eq-bar" style={{ animationPlayState: playing ? "running" : "paused" }} />
+            <span className="pill-eq-bar" style={{ animationPlayState: playing ? "running" : "paused" }} />
           </span>
           <Typography.Text id="pill-title" ellipsis style={{ flex: 1, color: "#e6e6e6", fontSize: 12, fontWeight: 600 }}>
             {track.title}
@@ -515,7 +515,7 @@ export default function NowPlaying({ queue, initialMode }: { queue: Track[]; ini
             onMouseDown={(e) => startDrag(e, () => toggleExpand(false))}
             onTouchStart={(e) => startDrag(e, () => toggleExpand(false))}
           >
-            <span className="drag-grip" onDoubleClick={(e) => { e.stopPropagation(); resetPos(); }}>⠿</span>
+            <span className="drag-grip" onDoubleClick={(e) => { e.stopPropagation(); resetPos(); }}></span>
             <span className="panel-title">Now Playing</span>
             <Button
               type="text" shape="circle" size="small" style={{ color: "#9a9a9a" }}

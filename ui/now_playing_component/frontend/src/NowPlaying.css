@@ -146,14 +146,16 @@ html, body { margin: 0 !important; padding: 0 !important; background: transparen
   border-radius: 2px;
   height: 30%;
   animation-play-state: paused;
+  animation-fill-mode: both; /* holds the exact frame it stopped on instead of snapping back to the base 30% the instant play-state pauses */
   transform-origin: bottom;
 }
 .pill-eq-playing .pill-eq-bar { animation-play-state: running; }
 
-.pill-eq-bar:nth-child(1) { animation: eq-bounce-1 0.9s ease-in-out infinite; }
-.pill-eq-bar:nth-child(2) { animation: eq-bounce-2 0.75s ease-in-out infinite; }
-.pill-eq-bar:nth-child(3) { animation: eq-bounce-3 1.05s ease-in-out infinite; }
-.pill-eq-bar:nth-child(4) { animation: eq-bounce-2 0.65s ease-in-out infinite; }
+/* Slower tempo than before (was 0.65s–1.05s per cycle) */
+.pill-eq-bar:nth-child(1) { animation: eq-bounce-1 1.6s ease-in-out infinite; }
+.pill-eq-bar:nth-child(2) { animation: eq-bounce-2 1.35s ease-in-out infinite; }
+.pill-eq-bar:nth-child(3) { animation: eq-bounce-3 1.85s ease-in-out infinite; }
+.pill-eq-bar:nth-child(4) { animation: eq-bounce-2 1.2s ease-in-out infinite; }
 
 @keyframes eq-bounce-1 { 0%, 100% { height: 25%; } 50% { height: 90%; } }
 @keyframes eq-bounce-2 { 0%, 100% { height: 40%; } 50% { height: 100%; } }

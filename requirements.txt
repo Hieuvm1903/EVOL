@@ -9,3 +9,5 @@ pillow
 boto3
 ytmusicapi
 streamlit-cookies-controller
+gspread 
+oauth2client
