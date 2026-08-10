@@ -39,7 +39,7 @@ export default function QueueList({ order, queue, currentTrackIdx, onReorder, on
   onReorder: (newOrder: number[]) => void;
   onPlay: (trackIdx: number) => void;
 }) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
