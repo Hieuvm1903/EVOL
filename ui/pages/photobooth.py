@@ -44,7 +44,7 @@ def _render_gesture_capture() -> None:
                 st.toast("Captured! Scroll down to preview and save.")
 
 
-def _render_capture() -> None:
+def _render_capture(user_id: int) -> None:
     if GESTURE_CAPTURE_AVAILABLE:
         mode = st.radio(
             "Capture mode",
@@ -76,15 +76,15 @@ def _render_capture() -> None:
             st.image(preview, caption="Preview", use_container_width=True)
 
             if st.button("Save to gallery", key="save_photo", icon=":material/save:"):
-                photos_service.save_photo(preview, caption.strip(), filter_name)
+                photos_service.save_photo(user_id, preview, caption.strip(), filter_name)
                 st.session_state["photobooth_raw_image"] = None
                 st.success("Saved!")
                 st.rerun()
 
 
-def _render_gallery() -> None:
+def _render_gallery(user_id: int) -> None:
     st.markdown("### Gallery")
-    photos_df = photos_service.get_photos()
+    photos_df = photos_service.get_photos(user_id)
 
     if photos_df.empty:
         st.info("No photos yet — take one above!")
@@ -109,14 +109,23 @@ def _render_gallery() -> None:
             if row["caption"]:
                 st.markdown(f'<div class="evol-card-body">{row["caption"]}</div>', unsafe_allow_html=True)
             if st.button("Delete", key=f"del_photo_{row['id']}", icon=":material/delete:"):
-                photos_service.delete_photo(int(row["id"]))
+                photos_service.delete_photo(int(row["id"]), user_id)
                 st.rerun()
 
 
 def render() -> None:
     st.markdown("## :material/photo_camera: Photobooth")
+
+    user = st.session_state.get("user")
+    if not user:
+        st.warning(
+            "Log in first (see the Login tab) — your gallery is personal to your account.",
+            icon=":material/lock:",
+        )
+        return
+
     st.caption("Snap a pic — by clicking or with a gesture — add a filter, save it to your gallery.")
 
-    _render_capture()
+    _render_capture(user["id"])
     st.markdown("---")
-    _render_gallery()
+    _render_gallery(user["id"])

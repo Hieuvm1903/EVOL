@@ -69,11 +69,41 @@ def rename_playlist(playlist_id: int, new_name: str) -> None:
 
 def rename_track(track_id: int, new_title: str) -> None:
     """Renames the track in the shared library — it'll show the new title
-    everywhere this track appears, not just in the playlist you renamed it from."""
+    everywhere this track appears (except in playlists that have their own
+    per-playlist name override — see rename_track_in_playlist)."""
     new_title = new_title.strip()
     if not new_title:
         return
     sheets_db.update("tracks", track_id, {"title": new_title})
+
+
+def rename_track_in_playlist(playlist_id: int, track_id: int, new_title: str) -> None:
+    """Give this track a custom display name *just within this playlist*,
+    without touching the shared library title or any other playlist that
+    also has this track."""
+    new_title = new_title.strip()
+    if not new_title:
+        return
+    pt = sheets_db.read_all("playlist_tracks")
+    if pt.empty:
+        return
+    match = pt[(pt["playlist_id"] == playlist_id) & (pt["track_id"] == track_id)]
+    if match.empty:
+        return
+    pt_id = int(match.iloc[0]["id"])
+    sheets_db.update("playlist_tracks", pt_id, {"custom_title": new_title})
+
+
+def reset_track_title_in_playlist(playlist_id: int, track_id: int) -> None:
+    """Clear a per-playlist name override, falling back to the library title."""
+    pt = sheets_db.read_all("playlist_tracks")
+    if pt.empty:
+        return
+    match = pt[(pt["playlist_id"] == playlist_id) & (pt["track_id"] == track_id)]
+    if match.empty:
+        return
+    pt_id = int(match.iloc[0]["id"])
+    sheets_db.update("playlist_tracks", pt_id, {"custom_title": ""})
 
 
 def get_playlists(user_id: int) -> pd.DataFrame:
@@ -119,14 +149,25 @@ def remove_track_from_playlist(playlist_id: int, track_id: int) -> None:
 
 
 def get_playlist_tracks(playlist_id: int) -> pd.DataFrame:
+    """Tracks for this playlist, in position order. `title` reflects this
+    playlist's own custom name if one's been set (rename_track_in_playlist);
+    `original_title` always holds the shared library title, so the UI can
+    show "renamed from X" / offer a reset."""
     pt = sheets_db.read_all("playlist_tracks")
     tracks = sheets_db.read_all("tracks")
     if pt.empty or tracks.empty:
-        return pd.DataFrame(columns=list(sheets_db.SCHEMA["tracks"]) + ["position"])
+        cols = list(sheets_db.SCHEMA["tracks"]) + ["position", "original_title"]
+        return pd.DataFrame(columns=cols)
 
     pt = pt[pt["playlist_id"] == playlist_id].sort_values("position")
     merged = pt.merge(tracks, left_on="track_id", right_on="id", suffixes=("_pt", ""))
-    cols = list(tracks.columns) + ["position"]
+    merged["original_title"] = merged["title"]
+
+    custom = merged["custom_title"].fillna("").astype(str).str.strip()
+    has_custom = custom != ""
+    merged.loc[has_custom, "title"] = custom[has_custom]
+
+    cols = list(tracks.columns) + ["position", "original_title"]
     return merged[cols].reset_index(drop=True)
 
 

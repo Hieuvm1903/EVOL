@@ -26,25 +26,29 @@ SCOPES = [
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CREDENTIALS_PATH = os.path.join(ROOT_DIR, "credentials.json")
 
-# Tab name -> ordered column list.
+# Tab name -> ordered column list. This is the *target* schema — used to
+# create a brand-new tab, and to backfill columns onto an existing tab that
+# predates a schema change (see _ensure_header). Once a tab exists, its
+# live header row (not this list's order) is what writes actually follow,
+# so adding a column here is safe even on a sheet with existing data.
 SCHEMA: dict[str, list[str]] = {
     "notes":  ["id", "content", "time"],
     "blog":   ["id", "content", "time"],
-    "places": ["id", "name", "lat", "lon", "description", "icon", "time"],
-    "photos": ["id", "filename", "caption", "filter", "time"],
+    "places": ["id", "user_id", "name", "lat", "lon", "description", "icon", "time"],
+    "photos": ["id", "user_id", "filename", "caption", "filter", "time"],
     "users":  ["id", "username", "password_hash", "created_at"],
     "sessions": ["token", "user_id", "created_at", "expires_at"],  # token is the PK here
     "tracks": ["id", "title", "video_id", "youtube_url", "thumbnail_url", "added_by", "created_at"],
     "playlists": ["id", "user_id", "name", "created_at"],
-    "playlist_tracks": ["id", "playlist_id", "track_id", "position", "added_at"],
+    "playlist_tracks": ["id", "playlist_id", "track_id", "custom_title", "position", "added_at"],
 }
 
 # Columns that should come back as ints (not the strings Sheets stores).
 _INT_COLUMNS: dict[str, list[str]] = {
     "notes": ["id"],
     "blog": ["id"],
-    "places": ["id"],
-    "photos": ["id"],
+    "places": ["id", "user_id"],
+    "photos": ["id", "user_id"],
     "users": ["id"],
     "sessions": ["user_id"],
     "tracks": ["id", "added_by"],
@@ -112,11 +116,25 @@ def _pk(table: str) -> str:
 def _worksheet(table: str):
     ss = _spreadsheet()
     try:
-        return ss.worksheet(table)
+        ws = ss.worksheet(table)
     except gspread.WorksheetNotFound:
         ws = ss.add_worksheet(title=table, rows=1000, cols=max(len(SCHEMA[table]), 1))
         ws.append_row(SCHEMA[table])
         return ws
+    _ensure_header(ws, table)
+    return ws
+
+
+def _ensure_header(ws, table: str) -> None:
+    """If SCHEMA gained columns since this tab was created (e.g. adding
+    `user_id` to an existing `places` tab), append the missing ones to the
+    live header row. Appending — never reordering — means existing rows and
+    column positions are untouched; old rows just read back with an empty
+    value for the new column until you backfill them."""
+    header = ws.row_values(1)
+    missing = [c for c in SCHEMA[table] if c not in header]
+    if missing:
+        ws.update("A1", [header + missing])
 
 
 # ---------------------------------------------------------------------------
@@ -165,8 +183,10 @@ def insert(table: str, row: dict) -> dict:
     if pk == "id" and "id" not in row:
         row = {**row, "id": _next_id(table)}
 
-    ordered = [row.get(col, "") for col in SCHEMA[table]]
-    _worksheet(table).append_row(ordered, value_input_option="USER_ENTERED")
+    ws = _worksheet(table)
+    header = ws.row_values(1)  # live header, not SCHEMA — see _ensure_header
+    ordered = [row.get(col, "") for col in header]
+    ws.append_row(ordered, value_input_option="USER_ENTERED")
     _invalidate()
     return row
 

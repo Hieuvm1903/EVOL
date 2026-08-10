@@ -8,7 +8,7 @@ from services import places_service
 from ui.styles import render_card
 
 
-def _render_add_form() -> None:
+def _render_add_form(user_id: int) -> None:
     with st.expander("Add a new place", icon=":material/add_location:", expanded=False):
         col1, col2 = st.columns(2)
         with col1:
@@ -33,6 +33,7 @@ def _render_add_form() -> None:
                 if not (-90 <= lat <= 90 and -180 <= lon <= 180):
                     raise ValueError("Latitude must be -90..90 and longitude -180..180")
                 places_service.add_place(
+                    user_id,
                     place_name.strip() or "Untitled place",
                     lat, lon,
                     place_desc.strip(),
@@ -64,7 +65,7 @@ def _render_map(places_df: pd.DataFrame) -> None:
     st_folium(m, width=None, height=520, key="places_map")
 
 
-def _render_list(places_df: pd.DataFrame) -> None:
+def _render_list(places_df: pd.DataFrame, user_id: int) -> None:
     if places_df.empty:
         st.info("No places saved yet — add your first one above.")
         return
@@ -82,15 +83,24 @@ def _render_list(places_df: pd.DataFrame) -> None:
             )
         with c2:
             if st.button("", key=f"del_{row['id']}", icon=":material/delete:", help="Delete this place"):
-                places_service.delete_place(int(row["id"]))
+                places_service.delete_place(int(row["id"]), user_id)
                 st.rerun()
 
 
 def render() -> None:
     st.markdown("## :material/location_on: Places")
+
+    user = st.session_state.get("user")
+    if not user:
+        st.warning(
+            "Log in first (see the Login tab) — your places are personal to your account.",
+            icon=":material/lock:",
+        )
+        return
+
     st.caption("Save spots you care about — paste coordinates, add a description, pick an icon.")
 
-    _render_add_form()
-    places_df = places_service.get_places()
+    _render_add_form(user["id"])
+    places_df = places_service.get_places(user["id"])
     _render_map(places_df)
-    _render_list(places_df)
+    _render_list(places_df, user["id"])

@@ -219,16 +219,26 @@ def _render_track_row(playlist_id: int, tracks_df, t) -> None:
         _play_track_next(t)
 
     with tc_rename:
-        with st.popover("", icon=":material/edit:", help="Rename track"):
+        with st.popover("", icon=":material/edit:", help="Rename in this playlist"):
+            is_renamed = t["title"] != t["original_title"]
+
             new_title = st.text_input(
-                "New title", value=t["title"], key=f"renametrack_{playlist_id}_{tid}",
-                label_visibility="collapsed",
+                "Name in this playlist", value=t["title"],
+                key=f"renametrack_{playlist_id}_{tid}", label_visibility="collapsed",
             )
-            st.caption("Renames this track everywhere it's used, not just here.")
-            if st.button("Save", key=f"renametracksave_{playlist_id}_{tid}",
-                         icon=":material/save:", use_container_width=True):
-                music_service.rename_track(tid, new_title)
+            st.caption(f"Library title: {t['original_title']}")
+            st.caption("Only changes how it looks in this playlist — other playlists keep their own name.")
+
+            rc1, rc2 = st.columns(2)
+            if rc1.button("Save", key=f"renametracksave_{playlist_id}_{tid}",
+                          icon=":material/save:", use_container_width=True):
+                music_service.rename_track_in_playlist(playlist_id, tid, new_title)
                 st.rerun()
+            if is_renamed:
+                if rc2.button("Reset", key=f"renametrackreset_{playlist_id}_{tid}",
+                              icon=":material/restart_alt:", use_container_width=True):
+                    music_service.reset_track_title_in_playlist(playlist_id, tid)
+                    st.rerun()
 
     if tc_remove.button("", key=f"rm_{playlist_id}_{tid}", icon=":material/delete:",
                          help="Remove from playlist"):
