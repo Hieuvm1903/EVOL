@@ -284,7 +284,13 @@ export default function NowPlaying({ queue, initialMode }: { queue: Track[]; ini
     let raf: number | null = null;
     const report = () => {
       raf = null;
-      const h = el.scrollHeight;
+      // getBoundingClientRect is sub-pixel accurate, unlike scrollHeight
+      // (integer, rounds down) — rounding scrollHeight down was clipping
+      // the panel's bottom border by a fraction of a pixel in some layouts
+      // (flex children can produce fractional heights), which is what made
+      // the bottom outline disappear specifically in lyrics mode. +2px
+      // buffer for extra safety margin against any remaining rounding.
+      const h = Math.ceil(el.getBoundingClientRect().height) + 2;
       if (h !== lastHeight) { lastHeight = h; Streamlit.setFrameHeight(h); }
     };
     const scheduleReport = () => { if (!raf) raf = requestAnimationFrame(report); };
@@ -293,7 +299,6 @@ export default function NowPlaying({ queue, initialMode }: { queue: Track[]; ini
     scheduleReport();
     return () => { observer.disconnect(); if (raf) cancelAnimationFrame(raf); };
   }, []);
-
   function applyPos(left: number, top: number) {
     const el = getContainer();
     if (!el) return;
@@ -437,31 +442,39 @@ export default function NowPlaying({ queue, initialMode }: { queue: Track[]; ini
   // lost when switching tabs" bug — switching view isn't the real trigger,
   // but any rerun that happened to land while on the lyrics tab looked
   // exactly like it.
+
   const lastLyricsFetchKeyRef = useRef<string>("");
 
   useEffect(() => {
     const track = queue[currentTrackIdx];
     const key = track ? track.video_id : "";
     if (key === lastLyricsFetchKeyRef.current) return;
-    lastLyricsFetchKeyRef.current = key;
 
     setLyricsCandidates(undefined);
     setSelectedCandidateIdx(0);
     autoCandidatesRef.current = [];
-    if (!track) { setManualTitle(""); setManualArtist(""); return; }
+    if (!track) {
+      lastLyricsFetchKeyRef.current = key;
+      setManualTitle("");
+      setManualArtist("");
+      return;
+    }
 
     let cancelled = false;
     const { artist: parsedArtist, title: parsedTitle } = splitArtistTitle(track.title);
-    // Prefill the search fields with exactly what's being auto-searched,
-    // so the user sees what's actually being looked up and can tweak it.
     setManualTitle(parsedTitle);
     setManualArtist(parsedArtist ?? "");
 
     fetchLyricsCached({ ...track, artist: parsedArtist ?? undefined }).then((candidates) => {
-      if (cancelled) return;
+      if (cancelled) return; // a rerun cancelled this one — don't mark `key`
+      // as fetched, so the next effect run (even for
+      // the same video_id) is free to retry instead
+      // of silently skipping forever.
+      lastLyricsFetchKeyRef.current = key; // only commit on real completion
       autoCandidatesRef.current = candidates;
       setLyricsCandidates(candidates);
     });
+
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTrackIdx, queue]);
@@ -625,7 +638,6 @@ export default function NowPlaying({ queue, initialMode }: { queue: Track[]; ini
                 className="lyrics-candidate-select"
                 value={selectedCandidateIdx}
                 onChange={(idx) => setSelectedCandidateIdx(idx)}
-                getPopupContainer={(trigger) => trigger.parentElement as HTMLElement}
                 options={lyricsCandidates.map((c, idx) => ({
                   value: idx,
                   label: c.artistName ? `${c.trackName} — ${c.artistName}` : c.trackName,
