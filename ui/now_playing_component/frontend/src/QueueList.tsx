@@ -7,8 +7,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { HolderOutlined, DownOutlined, RightOutlined } from "@ant-design/icons";
-import type { Track } from "./NowPlaying";
-
+import type { Track } from "./types"; // was: import type { Track } from "./NowPlaying";
 function QueueRow({ id, track, isCurrent, onPlay }: {
   id: string; track: Track; isCurrent: boolean; onPlay: () => void;
 }) {
