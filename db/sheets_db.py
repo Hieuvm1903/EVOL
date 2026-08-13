@@ -38,7 +38,8 @@ SCHEMA: dict[str, list[str]] = {
     "photos": ["id", "user_id", "filename", "caption", "filter", "time"],
     "users":  ["id", "username", "password_hash", "created_at"],
     "sessions": ["token", "user_id", "created_at", "expires_at"],  # token is the PK here
-    "tracks": ["id", "title", "video_id", "youtube_url", "thumbnail_url", "added_by", "created_at"],
+    "tracks": ["id", "title", "artist", "video_id", "youtube_url", "thumbnail_url",
+               "lyrics_url", "added_by", "created_at"],
     "playlists": ["id", "user_id", "name", "created_at"],
     "playlist_tracks": ["id", "playlist_id", "track_id", "custom_title", "position", "added_at"],
 }

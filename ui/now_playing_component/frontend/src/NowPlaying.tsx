@@ -30,8 +30,6 @@ export default function NowPlaying({ queue, initialMode }: { queue: Track[]; ini
     try { return localStorage.getItem(EXPANDED_KEY) === "1"; } catch { return false; }
   });
   const [view, setView] = useState<View>("video");
-  const [showUnmuteBanner, setShowUnmuteBanner] = useState(false); // kept for symmetry with engine.showUnmute below
-
   const rootRef = useRef<HTMLDivElement>(null);
   const pillRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);

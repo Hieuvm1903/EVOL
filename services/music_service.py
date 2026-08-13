@@ -22,13 +22,16 @@ def add_track(url: str, title: str | None, added_by: int) -> tuple[bool, str]:
     meta = youtube.fetch_metadata(normalized)
     final_title = (title or meta.get("title") or "").strip() or "Untitled track"
     thumbnail = meta.get("thumbnail_url", "")
+    artist = meta.get("author", "")
 
     t = datetime.now().astimezone(tz=TIMEZONE).strftime("%Y-%m-%d %H:%M:%S %z")
     sheets_db.insert("tracks", {
         "title": final_title,
+        "artist": artist,
         "video_id": video_id,
         "youtube_url": normalized,
         "thumbnail_url": thumbnail,
+        "lyrics_url": "",
         "added_by": added_by,
         "created_at": t,
     })
@@ -75,6 +78,23 @@ def rename_track(track_id: int, new_title: str) -> None:
     if not new_title:
         return
     sheets_db.update("tracks", track_id, {"title": new_title})
+
+
+def update_track_details(
+    track_id: int,
+    artist: str | None = None,
+    lyrics_url: str | None = None,
+) -> None:
+    """Update a track's artist and/or lyrics link. Library-wide, like the
+    title — shows up the same in every playlist that includes this track.
+    Pass only the field(s) you want to change; the other is left as-is."""
+    changes = {}
+    if artist is not None:
+        changes["artist"] = artist.strip()
+    if lyrics_url is not None:
+        changes["lyrics_url"] = lyrics_url.strip()
+    if changes:
+        sheets_db.update("tracks", track_id, changes)
 
 
 def rename_track_in_playlist(playlist_id: int, track_id: int, new_title: str) -> None:
@@ -193,11 +213,12 @@ def add_track_and_attach(
     added_by: int,
     known_title: str | None = None,
     known_thumbnail: str | None = None,
+    known_artist: str | None = None,
 ) -> tuple[bool, str, int | None]:
     """Add a track to the library (reusing it if the video is already there)
-    and attach it to `playlist_id` in one step. `known_title`/`known_thumbnail`
-    let a caller that already has metadata (e.g. from search) skip the
-    oEmbed lookup add_track() would otherwise do."""
+    and attach it to `playlist_id` in one step. `known_title`/`known_thumbnail`/
+    `known_artist` let a caller that already has metadata (e.g. from search)
+    skip the oEmbed lookup add_track() would otherwise do."""
     normalized = youtube.normalize_url(url)
     if not normalized:
         return False, "That doesn't look like a valid YouTube link.", None
@@ -213,17 +234,21 @@ def add_track_and_attach(
         if known_title:
             title = known_title
             thumbnail = known_thumbnail or ""
+            artist = known_artist or ""
         else:
             meta = youtube.fetch_metadata(normalized)
             title = meta.get("title") or "Untitled track"
             thumbnail = meta.get("thumbnail_url", "")
+            artist = known_artist or meta.get("author", "")
 
         t = datetime.now().astimezone(tz=TIMEZONE).strftime("%Y-%m-%d %H:%M:%S %z")
         new_row = sheets_db.insert("tracks", {
             "title": title,
+            "artist": artist,
             "video_id": video_id,
             "youtube_url": normalized,
             "thumbnail_url": thumbnail,
+            "lyrics_url": "",
             "added_by": added_by,
             "created_at": t,
         })

@@ -206,10 +206,14 @@ def _play_track_next(track_row) -> None:
 
 def _render_track_row(playlist_id: int, tracks_df, t) -> None:
     tid = int(t["id"])
-    tc_title, tc_play, tc_next, tc_rename, tc_remove = st.columns(
-        [4, 0.6, 0.6, 0.6, 0.6], vertical_alignment="center"
+    tc_title, tc_play, tc_next, tc_info, tc_rename, tc_remove = st.columns(
+        [4, 0.6, 0.6, 0.6, 0.6, 0.6], vertical_alignment="center"
     )
-    tc_title.write(t["title"])
+
+    if t.get("artist"):
+        tc_title.markdown(f"{t['title']}  \n:gray[{t['artist']}]")
+    else:
+        tc_title.write(t["title"])
 
     if tc_play.button("", key=f"trackplay_{playlist_id}_{tid}", icon=":material/play_arrow:",
                        help="Play from here"):
@@ -217,6 +221,25 @@ def _render_track_row(playlist_id: int, tracks_df, t) -> None:
     if tc_next.button("", key=f"tracknext_{playlist_id}_{tid}", icon=":material/queue_play_next:",
                        help="Play next"):
         _play_track_next(t)
+
+    with tc_info:
+        with st.popover("", icon=":material/info:", help="Edit artist / lyrics"):
+            new_artist = st.text_input(
+                "Artist", value=t.get("artist", "") or "",
+                key=f"artist_{playlist_id}_{tid}",
+            )
+            new_lyrics = st.text_input(
+                "Lyrics URL", value=t.get("lyrics_url", "") or "",
+                key=f"lyrics_{playlist_id}_{tid}", placeholder="https://...",
+            )
+            st.caption("Library-wide — shows the same in every playlist with this track.")
+            if st.button("Save", key=f"trackinfo_save_{playlist_id}_{tid}",
+                         icon=":material/save:", use_container_width=True):
+                music_service.update_track_details(tid, artist=new_artist, lyrics_url=new_lyrics)
+                st.rerun()
+            if t.get("lyrics_url"):
+                st.link_button("Open lyrics", t["lyrics_url"], icon=":material/lyrics:",
+                                use_container_width=True)
 
     with tc_rename:
         with st.popover("", icon=":material/edit:", help="Rename in this playlist"):
@@ -268,6 +291,7 @@ def _render_add_track(playlist_id: int, user_id: int, existing_ids: set) -> None
                     ok, msg, _ = music_service.add_track_and_attach(
                         playlist_id, url, user_id,
                         known_title=r["title"], known_thumbnail=r["thumbnail_url"],
+                        known_artist=r["artist"],
                     )
                     (st.success if ok else st.error)(msg)
                     if ok:

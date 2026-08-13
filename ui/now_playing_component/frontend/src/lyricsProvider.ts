@@ -167,3 +167,56 @@ export function currentLineIndex(lines: LyricLine[], curTime: number): number {
   }
   return idx;
 }
+export async function fetchLyricsById(
+  id: string | number
+): Promise<LyricsCandidate | null> {
+  try {
+    const res = await fetch(`https://lrclib.net/api/get/${id}`, {
+      headers: {
+        "User-Agent": "YourAppName/1.0[](https://github.com/your/repo)",
+      },
+    });
+
+    if (!res.ok) return null;
+
+    const data: {
+      id: number;
+      trackName: string;
+      artistName: string;
+      albumName: string;
+      duration: number;
+      instrumental: boolean;
+      syncedLyrics: string | null;
+      plainLyrics: string | null;
+    } = await res.json();
+
+    if (!data.syncedLyrics || data.instrumental) return null;
+
+    const lines = parseLRC(data.syncedLyrics);
+    if (lines.length === 0) return null;
+
+    return {
+      id: data.id,
+      trackName: data.trackName,
+      artistName: data.artistName,
+      albumName: data.albumName,
+      duration: data.duration,
+      lines,
+    };
+  } catch (err) {
+    console.warn("fetchLyricsById failed:", err);
+    return null;
+  }
+}
+
+const _byIdCache = new Map<string, Promise<LyricsCandidate | null>>();
+
+/** Cached wrapper, keyed by id. */
+export function fetchLyricsByIdCached(id: string | number): Promise<LyricsCandidate | null> {
+  const key = String(id);
+  const cached = _byIdCache.get(key);
+  if (cached) return cached;
+  const promise = fetchLyricsById(id).catch(() => null);
+  _byIdCache.set(key, promise);
+  return promise;
+}
