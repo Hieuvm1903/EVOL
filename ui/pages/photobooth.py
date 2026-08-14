@@ -68,18 +68,22 @@ def _render_capture(user_id: int) -> None:
 
     with col2:
         filter_name = st.selectbox("Filter", PHOTO_FILTERS)
-        caption = st.text_input("Caption (optional)")
 
         raw_image = st.session_state.get("photobooth_raw_image")
         if raw_image is not None:
             preview = apply_filter(raw_image, filter_name)
             st.image(preview, caption="Preview", use_container_width=True)
 
-            if st.button("Save to gallery", key="save_photo", icon=":material/save:"):
+            cap_col, save_col = st.columns([3, 1], vertical_alignment="bottom")
+            caption = cap_col.text_input("Caption (optional)")
+            if save_col.button("Save", key="save_photo", icon=":material/save:", use_container_width=True):
                 photos_service.save_photo(user_id, preview, caption.strip(), filter_name)
                 st.session_state["photobooth_raw_image"] = None
                 st.success("Saved!")
                 st.rerun()
+        else:
+            st.text_input("Caption (optional)", disabled=True,
+                           help="Take or capture a photo first to add a caption and save it.")
 
 
 def _render_gallery(user_id: int) -> None:

@@ -7,13 +7,15 @@ from ui.styles import render_card
 
 
 def render() -> None:
-    col1, col2 = st.columns([1, 3])
+    col1, col2, col3 = st.columns([1, 3, 1], vertical_alignment="bottom")
     with col1:
         key_input = st.text_input("Key???", "/Evolut??n")
     with col2:
         text = st.text_area("My thought", "")
+    with col3:
+        submit = st.button("Submit", key="submit_secret", icon=":material/send:", use_container_width=True)
 
-    if st.button("Submit", key="submit_secret", icon=":material/send:"):
+    if submit:
         if SECRET_KEY in key_input:
             blog_service.add_post(text.strip())
             st.success("Posted!!!")

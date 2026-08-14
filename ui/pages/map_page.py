@@ -21,9 +21,13 @@ def _render_add_form(user_id: int) -> None:
         with col2:
             icon_label = st.selectbox("Icon", list(PLACE_ICON_CHOICES.keys()))
             icon_color = st.selectbox("Color", PLACE_ICON_COLORS)
-        place_desc = st.text_area("Description", placeholder="Why this place matters...")
 
-        if st.button("Save place", key="save_place", icon=":material/save:"):
+        desc_col, save_col = st.columns([4, 1], vertical_alignment="bottom")
+        place_desc = desc_col.text_area("Description", placeholder="Why this place matters...")
+        save_clicked = save_col.button("Save place", key="save_place", icon=":material/save:",
+                                        use_container_width=True)
+
+        if save_clicked:
             if not coord_str.strip():
                 st.warning("Please paste coordinates first.")
                 return

@@ -6,8 +6,9 @@ from services import auth_service
 def _render_login_form() -> None:
     with st.form("login_form"):
         username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
-        submitted = st.form_submit_button("Log in", icon=":material/login:")
+        c1, c2 = st.columns([3, 1], vertical_alignment="bottom")
+        password = c1.text_input("Password", type="password")
+        submitted = c2.form_submit_button("Log in", icon=":material/login:", use_container_width=True)
 
     if submitted:
         user = auth_service.verify_user(username, password)
@@ -23,8 +24,10 @@ def _render_login_form() -> None:
 def _render_signup_form() -> None:
     with st.form("signup_form"):
         username = st.text_input("Choose a username", key="signup_username")
-        password = st.text_input("Choose a password", type="password", key="signup_password")
-        submitted = st.form_submit_button("Create account", icon=":material/person_add:")
+        c1, c2 = st.columns([3, 1], vertical_alignment="bottom")
+        password = c1.text_input("Choose a password", type="password", key="signup_password")
+        submitted = c2.form_submit_button("Create account", icon=":material/person_add:",
+                                           use_container_width=True)
 
     if submitted:
         ok, message = auth_service.register_user(username, password)
