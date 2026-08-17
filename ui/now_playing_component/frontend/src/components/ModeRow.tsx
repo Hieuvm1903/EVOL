@@ -23,7 +23,7 @@ export default function ModeRow({ mode, onModeChange, onReshuffle }: Props) {
           { value: "repeatAll", label: <Tooltip title="Repeat all"><RetweetOutlined /></Tooltip> },
         ]}
       />
-      {mode === "shuffle" && (
+      {/* {mode === "shuffle" && (
         <Tooltip title="Shuffle again">
           <Button
             type="text" size="small" icon={<SwapOutlined />}
@@ -31,7 +31,7 @@ export default function ModeRow({ mode, onModeChange, onReshuffle }: Props) {
             style={{ marginLeft: 6, color: "#02ab21" }}
           />
         </Tooltip>
-      )}
+      )} */}
     </div>
   );
 }

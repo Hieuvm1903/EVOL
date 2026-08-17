@@ -33,7 +33,7 @@ export function usePlayerEngine(queue: Track[], initialMode: string) {
   useEffect(() => { queueRef.current = queue; }, [queue]);
 
   useEffect(() => {
-    if (mode === "shuffle" && prevModeRef.current !== "shuffle") {
+    if (mode === "shuffle") {
       setOrder(shuffleQueue(queueRef.current.length));
     }
     prevModeRef.current = mode;
