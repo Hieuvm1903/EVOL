@@ -26,19 +26,28 @@ PHOTOS_DIR = os.path.join(ROOT_DIR, "assets", "photos")
 os.makedirs(PHOTOS_DIR, exist_ok=True)
 
 # Map marker icon choices: label shown in the UI -> Font Awesome icon name
+# Map marker icon choices: label shown in the UI -> Font Awesome icon name
 PLACE_ICON_CHOICES = {
-    "📍 Marker": "map-marker",
-    "🏠 Home": "home",
-    "⭐ Star": "star",
-    "❤️ Heart": "heart",
-    "☕ Cafe": "coffee",
-    "🌳 Park / Nature": "tree",
-    "🍽️ Food": "cutlery",
-    "🏨 Hotel": "bed",
-    "🎓 School": "graduation-cap",
-    "🎁 Gift": "gift",
-    "🚩 Flag": "flag",
-    "🎵 Music": "music",
+    "📍": "map-marker",
+    "🏠": "home",
+    "⭐": "star",
+    "❤️": "heart",
+    "☕": "coffee",
+    "🌳": "tree",
+    "🍽️": "cutlery",
+    "🏨": "bed",
+    "🎓": "graduation-cap",
+    "🎁": "gift",
+    "🚩": "flag",
+    "🎵": "music",
+    "🎉": "glass",
+    "🛍️": "shopping-cart",
+    "🎬": "film",
+    "📷": "camera-retro",
+    "🏛️": "university",
+    "🚗": "car",
+    "🌊": "tint",
+    "🎡": "ticket",
 }
 PLACE_ICON_COLORS = ["red", "blue", "green", "purple", "orange", "darkred", "cadetblue", "pink"]
 

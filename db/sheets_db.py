@@ -32,7 +32,7 @@ CREDENTIALS_PATH = os.path.join(ROOT_DIR, "credentials.json")
 SCHEMA: dict[str, list[str]] = {
     "notes":  ["id", "content", "time"],
     "blog":   ["id", "content", "time"],
-    "places": ["id", "user_id", "name", "lat", "lon", "description", "icon", "time"],
+    "places": ["id", "user_id", "name", "lat", "lon", "description", "icon", "tags", "time"],
     "photos": ["id", "user_id", "filename", "caption", "filter", "time"],
     "users":  ["id", "username", "password_hash", "created_at"],
     "sessions": ["token", "user_id", "created_at", "expires_at"],
@@ -179,6 +179,27 @@ def _invalidate(table: str) -> None:
     _read_records.clear(table)
 
 
+def _normalize_decimal(value):
+    """Sheets data is free-text under the hood — a cell can end up with a
+    comma decimal separator (e.g. '21,0285' from a locale mismatch) instead
+    of a dot. pd.to_numeric() would silently turn that into NaN rather than
+    erroring, so fix it up first:
+      - both ',' and '.' present  -> assume ',' is a thousands separator, drop it
+      - only ','                  -> assume it's the decimal separator, swap to '.'
+      - otherwise                 -> leave as-is
+    """
+    if not isinstance(value, str):
+        return value
+    v = value.strip()
+    if not v:
+        return v
+    if "," in v and "." in v:
+        return v.replace(",", "")
+    if "," in v:
+        return v.replace(",", ".")
+    return v
+
+
 def read_all(table: str) -> pd.DataFrame:
     records = _read_records(table)
     df = pd.DataFrame(records, columns=SCHEMA[table])
@@ -187,9 +208,9 @@ def read_all(table: str) -> pd.DataFrame:
             df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int64")
     for col in _FLOAT_COLUMNS.get(table, []):
         if col in df.columns:
+            df[col] = df[col].map(_normalize_decimal)
             df[col] = pd.to_numeric(df[col], errors="coerce")
     return df
-
 
 def read_many(tables: list[str]) -> dict[str, pd.DataFrame]:
     """Read several tables in one shot. Each table is still served from its

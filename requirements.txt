@@ -12,3 +12,4 @@ streamlit-cookies-controller
 gspread 
 oauth2client
 pytz
+streamlit-js-eval
