@@ -11,18 +11,14 @@ from math import radians, sin, cos, sqrt, atan2
 from streamlit_folium import st_folium
 from streamlit_js_eval import get_geolocation
 
-from config import PLACE_ICON_CHOICES, PLACE_ICON_COLORS, TIMEZONE
+from config import PLACE_ICON_CHOICES, TIMEZONE
 from services import places_service
 
 _FA_TO_LABEL = {fa: label for label, fa in PLACE_ICON_CHOICES.items()}
 _FLYTO_ZOOM = 17
 _CENTER_ZOOM = 15
 _PROXY_PARK_LATLNG = (89.9, 0.0)  # off-screen home for the right-click proxy marker
-
-_COLOR_HEX = {
-    "red": "#d63e2a", "blue": "#38aadd", "green": "#72b026", "purple": "#d252b9",
-    "orange": "#f69730", "darkred": "#a23336", "cadetblue": "#436978", "pink": "#ff8de6",
-}
+_DEFAULT_MARKER_COLOR = "#3388ff"  # fallback + default for new places
 
 _MAP_STYLES = {
     "Light": ("CartoDB positron", None),
@@ -126,9 +122,24 @@ def _emoji_pin_html(emoji: str, color_hex: str, size: int = 34) -> str:
     """
 
 
+def _resolve_color_hex(value) -> str:
+    """The stored place color is a raw hex string (from st.color_picker).
+    Rows created before the switch to a free color picker may still have
+    an old fixed-palette color *name* (e.g. "blue") — that's not valid
+    hex, so just fall back to the default rather than mapping it; existing
+    rows can be fixed directly in the database."""
+    if isinstance(value, str) and len(value) == 7 and value.startswith("#"):
+        try:
+            int(value[1:], 16)
+            return value
+        except ValueError:
+            pass
+    return _DEFAULT_MARKER_COLOR
+
+
 def _place_marker_icon(icon_name: str, icon_color: str) -> folium.DivIcon:
     emoji = _icon_emoji_for_key(icon_name)
-    color_hex = _COLOR_HEX.get(icon_color, "#2c3e50")
+    color_hex = _resolve_color_hex(icon_color)
     return folium.DivIcon(html=_emoji_pin_html(emoji, color_hex), icon_size=(34, 34), icon_anchor=(17, 34))
 
 
@@ -195,33 +206,90 @@ def _resolve_geolocation(flag_key: str, js_key: str):
 
 
 # ---------------------------------------------------------------------------
-# Icon picker — a plain button grid in a popover. Replaces the third-party
+# Icon & color pickers — small, same-size trigger buttons side by side.
+#
+# Icon: a plain button grid in a popover. Replaces the third-party
 # streamlit-select-icons component, which rendered as oversized white cards
-# with broken horizontal+vertical scrollbars against our dark theme. This
-# gives full styling control and no dependency quirks.
+# with broken horizontal+vertical scrollbars against our dark theme.
+#
+# Color: a real st.color_picker (free-form hex, not a fixed palette) —
+# its swatch button is resized via scoped CSS to match the icon trigger's
+# footprint so the two line up.
 # ---------------------------------------------------------------------------
+
+_PICKER_TRIGGER_CSS = """
+<style>
+.st-key-{key} {{
+    display: flex;
+}}
+.st-key-{key} div[data-testid="stColorPicker"],
+.st-key-{key} div[data-testid="stColorPicker"] > div,
+.st-key-{key} div[data-testid="stColorPickerBlock"] {{
+    width: 42px !important;
+}}
+.st-key-{key} div[data-testid="stColorPicker"] > label {{
+    display: none !important;
+}}
+.st-key-{key} div[data-testid="stPopover"] > button,
+.st-key-{key} div[data-testid="stColorPicker"] button,
+.st-key-{key} div[data-testid="stColorPicker"] input[type="color"] {{
+    box-sizing: border-box !important;
+    width: 42px !important;
+    height: 38px !important;
+    min-width: 42px !important;
+    min-height: 38px !important;
+    max-width: 42px !important;
+    max-height: 38px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 1px solid rgba(250, 250, 250, 0.2) !important;
+    border-radius: 8px !important;
+    font-size: 1.05rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    -webkit-appearance: none;
+    appearance: none;
+}}
+</style>
+"""
+
 
 def _render_icon_grid_popover(panel_key: str, icon_state_key: str) -> None:
     chosen = st.session_state[icon_state_key]
     items = list(PLACE_ICON_CHOICES.items())  # [(label, fa_name), ...]
     cols_per_row = 4
+    trigger_key = f"icon_trigger_{panel_key}"
 
-    with st.popover(_icon_label_for_key(chosen), use_container_width=True):
-        st.caption("Choose an icon")
-        for i in range(0, len(items), cols_per_row):
-            row_items = items[i:i + cols_per_row]
-            cols = st.columns(cols_per_row)
-            for col, (label, fa_name) in zip(cols, row_items):
-                emoji = label.split(" ", 1)[0]
-                is_selected = fa_name == chosen
-                with col:
-                    if st.button(
-                        emoji, key=f"iconbtn_{panel_key}_{fa_name}",
-                        help=fa_name, use_container_width=True,
-                        type="primary" if is_selected else "secondary",
-                    ):
-                        st.session_state[icon_state_key] = fa_name
-                        st.rerun()
+    # st.markdown(_PICKER_TRIGGER_CSS.format(key=trigger_key), unsafe_allow_html=True)
+
+    with st.container(key=trigger_key):
+        with st.popover(_icon_emoji_for_key(chosen), help=_icon_label_for_key(chosen)):
+            st.caption("Choose an icon")
+            for i in range(0, len(items), cols_per_row):
+                row_items = items[i:i + cols_per_row]
+                cols = st.columns(cols_per_row)
+                for col, (label, fa_name) in zip(cols, row_items):
+                    emoji = label.split(" ", 1)[0]
+                    is_selected = fa_name == chosen
+                    with col:
+                        if st.button(
+                            emoji, key=f"iconbtn_{panel_key}_{fa_name}",
+                            help=fa_name, use_container_width=True,
+                            type="primary" if is_selected else "secondary",
+                        ):
+                            st.session_state[icon_state_key] = fa_name
+                            st.rerun()
+
+
+def _render_color_picker(panel_key: str, default_hex: str) -> str:
+    trigger_key = f"color_trigger_{panel_key}"
+    #st.markdown(_PICKER_TRIGGER_CSS.format(key=trigger_key), unsafe_allow_html=True)
+
+    with st.container(key=trigger_key):
+        return st.color_picker(
+            "Color", value=default_hex, key=f"color_{panel_key}", label_visibility="collapsed"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -291,7 +359,11 @@ def _render_place_form(user_id: int, prefill: tuple[float, float] | None, edit_p
     else:
         default_lat, default_lon = 16.0, 106.0
     default_desc = edit_place["description"] if is_edit else ""
-    default_icon_key, default_color = _split_icon(edit_place["icon"]) if is_edit else ("map-marker", "blue")
+    if is_edit:
+        default_icon_key, default_color_raw = _split_icon(edit_place["icon"])
+    else:
+        default_icon_key, default_color_raw = "map-marker", _DEFAULT_MARKER_COLOR
+    default_color = _resolve_color_hex(default_color_raw)
     default_tags = _parse_tags(edit_place.get("tags", "")) if is_edit else []
 
     st.markdown(f"#### {'Edit place' if is_edit else '➕ Add new place'}")
@@ -312,13 +384,15 @@ def _render_place_form(user_id: int, prefill: tuple[float, float] | None, edit_p
         st.session_state[lat_key] = f"{pair[0]:.6f}"
         st.session_state[lon_key] = f"{pair[1]:.6f}"
 
-    name_col, icon_col = st.columns([2, 1])
+    # Name / icon / color all sit on one row, top-aligned. Icon and color
+    # triggers are both fixed at the same small size (see _PICKER_TRIGGER_CSS)
+    # so they line up with each other under matching captions.
+    name_col, icon_col, color_col = st.columns([4, 1, 1])
     with name_col:
-        name = st.text_input("Place name", value=default_name, placeholder="e.g. Hồ Gươm", key=f"name_{panel_key}")
-        color = st.selectbox(
-            "Color", PLACE_ICON_COLORS,
-            index=PLACE_ICON_COLORS.index(default_color) if default_color in PLACE_ICON_COLORS else 0,
-            key=f"color_{panel_key}",
+        st.caption("Place name")
+        name = st.text_input(
+            "Place name", value=default_name, placeholder="e.g. Hồ Gươm",
+            key=f"name_{panel_key}", label_visibility="collapsed",
         )
     with icon_col:
         st.caption("Icon")
@@ -327,6 +401,9 @@ def _render_place_form(user_id: int, prefill: tuple[float, float] | None, edit_p
             st.session_state[icon_state_key] = default_icon_key
         _render_icon_grid_popover(panel_key, icon_state_key)
         chosen_icon_key = st.session_state[icon_state_key]
+    with color_col:
+        st.caption("Color")
+        color = _render_color_picker(panel_key, default_color)
 
     col1, col2, col3 = st.columns([2, 2, 1])
     with col1:
@@ -345,6 +422,20 @@ def _render_place_form(user_id: int, prefill: tuple[float, float] | None, edit_p
                       help="Fill in my current location", use_container_width=True):
             _trigger_geolocation(geoloc_flag)
             st.rerun()
+
+    # Live map preview: reflect the name/icon/color/position currently in
+    # the form immediately, even before Save is pressed. render() reads
+    # this to temporarily override (edit) or append (add) a marker when
+    # drawing the map alongside this panel.
+    preview_lat = _normalize_single_decimal(lat_raw)
+    preview_lon = _normalize_single_decimal(lon_raw)
+    st.session_state["map_live_preview"] = {
+        "id": int(edit_place["id"]) if is_edit else None,
+        "name": name.strip() or "Untitled place",
+        "lat": preview_lat if preview_lat is not None else (default_lat if is_edit else None),
+        "lon": preview_lon if preview_lon is not None else (default_lon if is_edit else None),
+        "icon_value": f"{chosen_icon_key}|{color}",
+    }
 
     existing_tags = places_service.get_all_tags(user_id)
     tags_str = st.text_input(
@@ -388,12 +479,14 @@ def _render_place_form(user_id: int, prefill: tuple[float, float] | None, edit_p
         st.session_state["map_panel_mode"] = None
         st.session_state["map_edit_place_id"] = None
         st.session_state.pop("map_prefill_coords", None)
+        st.session_state.pop("map_live_preview", None)
         st.rerun()
 
     if cancel_col.button("Cancel", use_container_width=True, key=f"cancel_{panel_key}"):
         st.session_state["map_panel_mode"] = None
         st.session_state["map_edit_place_id"] = None
         st.session_state.pop("map_prefill_coords", None)
+        st.session_state.pop("map_live_preview", None)
         st.rerun()
 
 
@@ -716,6 +809,41 @@ def _render_selected_place_actions(places_df: pd.DataFrame, user_id: int) -> Non
 
 
 # ---------------------------------------------------------------------------
+# Live preview — while the add/edit panel is open, reflect its current
+# name/icon/color/position on the map immediately, without requiring Save.
+# ---------------------------------------------------------------------------
+
+def _apply_live_preview(places_df: pd.DataFrame) -> pd.DataFrame:
+    preview = st.session_state.get("map_live_preview")
+    if not preview:
+        return places_df
+
+    df = places_df.copy()
+
+    if preview["id"] is not None:
+        # Editing an existing place: overlay the live values onto its row.
+        mask = df["id"] == preview["id"]
+        if mask.any():
+            df.loc[mask, "name"] = preview["name"]
+            df.loc[mask, "icon"] = preview["icon_value"]
+            if preview["lat"] is not None:
+                df.loc[mask, "lat"] = preview["lat"]
+            if preview["lon"] is not None:
+                df.loc[mask, "lon"] = preview["lon"]
+        return df
+
+    # Adding a new place: show it as a temporary extra marker, not yet saved.
+    if preview["lat"] is None or preview["lon"] is None:
+        return df
+    new_row = pd.DataFrame([{
+        "id": -1, "user_id": None, "name": preview["name"],
+        "lat": preview["lat"], "lon": preview["lon"],
+        "description": "", "icon": preview["icon_value"], "tags": "", "time": "",
+    }])
+    return pd.concat([df, new_row], ignore_index=True)
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
@@ -740,41 +868,36 @@ def render() -> None:
     style_names = list(_MAP_STYLES.keys())
     tile_mode = st.session_state.get("map_tile_mode", style_names[0])
 
-    btn1, btn2, btn3, btn4 = st.columns([1.2, 1.2, 1.1, 0.5])
+    # Add / Search / Map style are kept narrow so the map-tools multiselect
+    # (which needs room to show several selected chips) gets most of the row.
+    btn1, btn2, btn3, tools_col = st.columns([1, 1, 1, 2.6])
     with btn1:
-        if st.button("➕ Add new place", use_container_width=True, icon=":material/add_location:"):
+        if st.button("➕ Add", use_container_width=True, icon=":material/add_location:",
+                      help="Add new place"):
             st.session_state["map_edit_place_id"] = None
             st.session_state.pop("map_prefill_coords", None)
             st.session_state["map_panel_mode"] = "add"
             st.rerun()
     with btn2:
-        search_label = "✖️ Close search" if panel_mode == "search" else "🔍 Search places"
-        if st.button(search_label, use_container_width=True):
+        search_label = "✖️ Close" if panel_mode == "search" else "🔍 Search"
+        if st.button(search_label, use_container_width=True, help="Search places"):
             st.session_state["map_panel_mode"] = None if panel_mode == "search" else "search"
             st.rerun()
     with btn3:
-        st.selectbox("🗺️ Map style", style_names, index=style_names.index(tile_mode),
+        st.selectbox("Map style", style_names, index=style_names.index(tile_mode),
                      key="map_tile_mode", label_visibility="collapsed")
-    with btn4:
-        if st.button("", icon=":material/my_location:", key="center_geoloc_btn",
-                      help="Center the map on my location", use_container_width=True):
-            _trigger_geolocation("center_geoloc_active")
-            st.rerun()
+    with tools_col:
+        tools_selected = st.multiselect(
+            "Map tools", list(_TOOL_OPTIONS.keys()), key="map_tools_selected",
+            placeholder="🧩 Map tools (fullscreen, measure, heatmap...)",
+            label_visibility="collapsed",
+        )
 
-    tools_selected = st.multiselect(
-        "🧩 Map tools", list(_TOOL_OPTIONS.keys()), key="map_tools_selected",
-        help="Turn on any combination of map add-ons.",
-    )
     enabled_tools = frozenset(_TOOL_OPTIONS[label] for label in tools_selected)
     if "draw" in enabled_tools:
         st.caption("✏️ Draw mode is on — sketch with the map's toolbar. Nothing drawn here is saved.")
 
     tile_mode = st.session_state["map_tile_mode"]
-
-    fix = _resolve_geolocation("center_geoloc_active", js_key="center_geoloc")
-    if fix:
-        st.session_state["map_center_override"] = fix
-        st.rerun()
 
     places_df = places_service.get_places(user["id"])
     panel_mode = st.session_state.get("map_panel_mode")
@@ -797,7 +920,8 @@ def render() -> None:
                 edit_place=edit_place,
             )
         with map_col:
-            result = _render_map(places_df, center_override, my_location, selected_id, tile_mode,
+            preview_df = _apply_live_preview(places_df)
+            result = _render_map(preview_df, center_override, my_location, selected_id, tile_mode,
                                   enabled_tools=enabled_tools)
 
     elif panel_mode == "search":
