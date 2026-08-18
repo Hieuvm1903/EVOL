@@ -28,6 +28,101 @@ footer {visibility: hidden;}
 [data-testid="stSidebarCollapseButton"] svg {
     fill: #02ab21;
 }
+/* ---------------------------------------------------------------------
+   Sidebar redesign
+--------------------------------------------------------------------- */
+section[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #0f0f0f 0%, #0a0a0a 100%);
+    border-right: 1px solid #1f1f1f;
+}
+
+.evol-sidebar-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 4px 22px;
+    margin-bottom: 6px;
+    border-bottom: 1px solid #232323;
+}
+.evol-sidebar-brand-icon {
+    font-size: 1.5rem;
+    filter: drop-shadow(0 0 6px rgba(2, 171, 33, 0.55));
+}
+.evol-sidebar-brand-text {
+    font-family: 'Be Vietnam Pro', sans-serif;
+    font-weight: 700;
+    font-size: 1.15rem;
+    letter-spacing: 0.02em;
+    background: linear-gradient(90deg, #ffffff, #9be8a8);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+/* Section headers ("Home", "Account", "Explore") */
+[data-testid="stSidebarNav"] [data-testid="stSidebarNavSectionHeader"],
+section[data-testid="stSidebar"] .st-emotion-cache-1cypcdb,
+section[data-testid="stSidebar"] p:has(+ ul) {
+    font-family: 'Be Vietnam Pro', sans-serif;
+    font-size: 0.68rem !important;
+    font-weight: 600 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #6f6f6f !important;
+    padding: 14px 8px 6px !important;
+}
+
+/* Nav links */
+[data-testid="stSidebarNav"] a,
+section[data-testid="stSidebar"] li a {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-radius: 10px;
+    padding: 9px 12px !important;
+    margin: 2px 4px;
+    font-family: 'Be Vietnam Pro', sans-serif;
+    font-size: 0.92rem;
+    font-weight: 500;
+    color: #b8b8b8 !important;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+[data-testid="stSidebarNav"] a:hover,
+section[data-testid="stSidebar"] li a:hover {
+    background: #1a1a1a;
+    color: #ffffff !important;
+    transform: translateX(2px);
+}
+
+/* Active/current page */
+[data-testid="stSidebarNav"] a[aria-current="page"],
+section[data-testid="stSidebar"] li a[aria-current="page"] {
+    background: linear-gradient(90deg, #02ab21, #029a1d);
+    color: #ffffff !important;
+    font-weight: 600;
+    box-shadow: 0 2px 10px rgba(2, 171, 33, 0.35);
+}
+[data-testid="stSidebarNav"] a[aria-current="page"] span,
+[data-testid="stSidebarNav"] a[aria-current="page"] [data-testid="stIconMaterial"] {
+    color: #ffffff !important;
+}
+
+/* Icons */
+[data-testid="stSidebarNav"] [data-testid="stIconMaterial"] {
+    font-size: 1.1rem !important;
+    color: #7a7a7a;
+}
+[data-testid="stSidebarNav"] a:hover [data-testid="stIconMaterial"] {
+    color: #3ddc57;
+}
+
+/* Thin scrollbar for long nav lists, matches queue-list styling elsewhere */
+section[data-testid="stSidebar"] ::-webkit-scrollbar { width: 6px; }
+section[data-testid="stSidebar"] ::-webkit-scrollbar-track { background: #141414; }
+section[data-testid="stSidebar"] ::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #02ab21, #017a17);
+    border-radius: 4px;
+}
 footer:after {
     content:'Made by EVOL';
     visibility: visible;

@@ -357,7 +357,7 @@ def _render_place_form(user_id: int, prefill: tuple[float, float] | None, edit_p
     elif prefill:
         default_lat, default_lon = prefill
     else:
-        default_lat, default_lon = 16.0, 106.0
+        default_lat, default_lon = 20.834955, 106.718237
     default_desc = edit_place["description"] if is_edit else ""
     if is_edit:
         default_icon_key, default_color_raw = _split_icon(edit_place["icon"])
@@ -870,7 +870,7 @@ def render() -> None:
 
     # Add / Search / Map style are kept narrow so the map-tools multiselect
     # (which needs room to show several selected chips) gets most of the row.
-    btn1, btn2, btn3, tools_col = st.columns([1, 1, 1, 2.6])
+    btn1, btn2, btn3, tools_col = st.columns([1, 1, 1, 5])
     with btn1:
         if st.button("➕ Add", use_container_width=True, icon=":material/add_location:",
                       help="Add new place"):
