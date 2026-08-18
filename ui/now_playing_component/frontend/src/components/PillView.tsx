@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Button, Typography } from "antd";
 import { PlayCircleFilled, PauseCircleFilled } from "@ant-design/icons";
 import type { Track } from "../types";

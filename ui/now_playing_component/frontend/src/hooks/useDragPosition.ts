@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
-import { POS_KEY, DRAG_THRESHOLD, PANEL_WIDTH } from "../constants";
+import { POS_KEY, DRAG_THRESHOLD, PANEL_WIDTH, EDGE_MARGIN } from "../constants";
 import { getContainer, pointFromEvent, clampToViewport } from "../utils/dom";
+import { DEFAULT_SNAP, nearestSnapId, snapPixelPosition, SnapId } from "../utils/snapPoints";
 
 type DragMeta = {
   el: HTMLElement; origLeft: number; origTop: number; w: number; h: number; vw: number; vh: number;
@@ -9,12 +10,13 @@ type DragMeta = {
   cleanup: () => void;
 };
 
-// Handles both the floating widget's position persistence (as a fraction
-// of the viewport, so it rescales symmetrically on resize instead of only
-// ever clamping inward) and the drag gesture itself. Listens on THIS
-// document (reliably receives the whole gesture, since the box tracks the
-// cursor) plus the parent's as a fast-drag safety net — safe to mix
-// sources since everything uses screen coordinates.
+// Handles the floating widget's position: it docks to one of 8 fixed
+// points on drop (see utils/snapPoints.ts) rather than free-floating, and
+// persists which point via POS_KEY (shared parent-window localStorage, so
+// it carries over between pages). Drag tracking itself is unchanged —
+// still a live transform following the cursor in screen coordinates —
+// only the *release* behavior now snaps instead of leaving it wherever
+// the cursor let go.
 export function useDragPosition() {
   const dragMeta = useRef<DragMeta | null>(null);
   const lastDragMoved = useRef(false);
@@ -28,8 +30,19 @@ export function useDragPosition() {
     el.style.top = `${top}px`;
   }
 
-  function savePosFraction(left: number, top: number, vw: number, vh: number) {
-    try { window.parent.localStorage.setItem(POS_KEY, JSON.stringify({ leftFrac: left / vw, topFrac: top / vh })); } catch { }
+  // Briefly enables a CSS transition on left/top so the final hop into a
+  // dock point reads as a "snap", then removes it — every other position
+  // change (drag tracking, resize) stays instant.
+  function applyPosAnimated(left: number, top: number) {
+    const el = getContainer();
+    if (!el) return;
+    el.classList.add("evol-snapping");
+    applyPos(left, top);
+    window.setTimeout(() => el.classList.remove("evol-snapping"), 220);
+  }
+
+  function saveSnap(id: SnapId) {
+    try { window.parent.localStorage.setItem(POS_KEY, JSON.stringify({ snap: id })); } catch { }
   }
 
   function resetPos() {
@@ -38,16 +51,20 @@ export function useDragPosition() {
     try { window.parent.localStorage.removeItem(POS_KEY); } catch { }
   }
 
+  // Re-derives pixel position for the currently-saved dock point using the
+  // widget's *current* box size — call on mount, on window resize, and
+  // after toggling pill <-> panel (their sizes differ).
   function applySavedPosition() {
     try {
       const raw = window.parent.localStorage.getItem(POS_KEY);
-      if (!raw) return;
-      const { leftFrac, topFrac } = JSON.parse(raw);
+      if (!raw) return; // nothing docked yet — leave the CSS default in place
+      const parsed = JSON.parse(raw);
+      const snapId: SnapId = parsed && typeof parsed.snap === "string" ? parsed.snap : DEFAULT_SNAP;
       const el = getContainer();
       if (!el) return;
       const w = el.offsetWidth || PANEL_WIDTH, h = el.offsetHeight || 60;
       const vw = window.parent.innerWidth, vh = window.parent.innerHeight;
-      const { left, top } = clampToViewport(leftFrac * vw, topFrac * vh, w, h, vw, vh);
+      const { left, top } = snapPixelPosition(snapId, w, h, vw, vh, EDGE_MARGIN);
       applyPos(left, top);
     } catch { }
   }
@@ -117,9 +134,12 @@ export function useDragPosition() {
       try { m.el.classList.remove("evol-dragging"); } catch { }
       try { window.parent.document.body.style.userSelect = ""; } catch { }
       if (m.moved) {
-        const left = m.origLeft + m.dx, top = m.origTop + m.dy;
-        applyPos(left, top);
-        savePosFraction(left, top, m.vw, m.vh);
+        m.el.style.transform = ""; // drop the drag-tracking transform; snap uses left/top instead
+        const rawLeft = m.origLeft + m.dx, rawTop = m.origTop + m.dy;
+        const snapId = nearestSnapId(rawLeft, rawTop, m.w, m.h, m.vw, m.vh, EDGE_MARGIN);
+        const { left, top } = snapPixelPosition(snapId, m.w, m.h, m.vw, m.vh, EDGE_MARGIN);
+        applyPosAnimated(left, top);
+        saveSnap(snapId);
       }
       lastDragMoved.current = m.moved;
       dragMeta.current = null;
@@ -151,5 +171,5 @@ export function useDragPosition() {
     return () => { dragMeta.current?.cleanup(); };
   }, []);
 
-  return { startDrag, resetPos };
+  return { startDrag, resetPos, applySavedPosition };
 }

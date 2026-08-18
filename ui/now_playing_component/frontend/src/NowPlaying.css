@@ -165,10 +165,30 @@ html, body { margin: 0 !important; padding: 0 !important; background: transparen
 .pill-eq { display: flex; align-items: flex-end; justify-content: center; gap: 2px; width: 32px; height: 32px; border-radius: 6px; background: #000; flex-shrink: 0; padding: 6px 5px; box-sizing: border-box; }
 .pill-eq-bar { width: 3px; background: #02ab21; border-radius: 2px; height: 30%; animation-play-state: paused; animation-fill-mode: both; transform-origin: bottom; }
 .pill-eq-playing .pill-eq-bar { animation-play-state: running; }
-.pill-eq-bar:nth-child(1) { animation: eq-bounce-1 1.6s ease-in-out infinite; }
-.pill-eq-bar:nth-child(2) { animation: eq-bounce-2 1.35s ease-in-out infinite; }
-.pill-eq-bar:nth-child(3) { animation: eq-bounce-3 1.85s ease-in-out infinite; }
-.pill-eq-bar:nth-child(4) { animation: eq-bounce-2 1.2s ease-in-out infinite; }
+.pill-eq-bar:nth-child(1) {
+  animation-name: eq-bounce-1;
+  animation-duration: 1.6s;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+.pill-eq-bar:nth-child(2) {
+  animation-name: eq-bounce-2;
+  animation-duration: 1.35s;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+.pill-eq-bar:nth-child(3) {
+  animation-name: eq-bounce-3;
+  animation-duration: 1.85s;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+.pill-eq-bar:nth-child(4) {
+  animation-name: eq-bounce-2;
+  animation-duration: 1.2s;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
 @keyframes eq-bounce-1 { 0%, 100% { height: 25%; } 50% { height: 90%; } }
 @keyframes eq-bounce-2 { 0%, 100% { height: 40%; } 50% { height: 100%; } }
 @keyframes eq-bounce-3 { 0%, 100% { height: 20%; } 50% { height: 70%; } }

@@ -261,7 +261,7 @@ div[data-testid="stExpander"] {
     background: transparent !important;
 }
 .st-key-now_playing_drawer.evol-dragging {
-    transition: none !important;
+    transition: left 0.2s ease, top 0.2s ease, box-shadow 0.15s ease;
     will-change: transform;
     filter: drop-shadow(0 10px 26px rgba(0,0,0,0.55));
 }

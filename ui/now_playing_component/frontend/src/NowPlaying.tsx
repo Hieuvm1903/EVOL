@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ConfigProvider, theme as antdTheme, Typography } from "antd";
 import { Streamlit } from "streamlit-component-lib";
 
@@ -35,10 +35,18 @@ export default function NowPlaying({ queue, initialMode }: { queue: Track[]; ini
   const headerRef = useRef<HTMLDivElement>(null);
 
   const engine = usePlayerEngine(queue, initialMode);
-  const { startDrag, resetPos } = useDragPosition();
+  const { startDrag, resetPos, applySavedPosition } = useDragPosition();
   const lyrics = useLyrics(queue, engine.currentTrackIdx, engine.curTime);
 
   useFrameHeight(rootRef);
+
+  // Pill and panel are different sizes — after switching between them,
+  // re-derive pixel position for whatever corner is currently docked.
+  useEffect(() => {
+    const id = requestAnimationFrame(() => applySavedPosition());
+    return () => cancelAnimationFrame(id);
+  }, [expanded])
+
 
   function toggleExpand(v: boolean) {
     setExpanded(v);

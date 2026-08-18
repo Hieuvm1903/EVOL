@@ -18,20 +18,20 @@ export default function ModeRow({ mode, onModeChange, onReshuffle }: Props) {
         onChange={(v) => onModeChange(v as Mode)}
         options={[
           { value: "normal", label: <Tooltip title="Normal"><UnorderedListOutlined /></Tooltip> },
-          { value: "shuffle", label: <Tooltip title="Shuffle"><SwapOutlined /></Tooltip> },
+          //{ value: "shuffle", label: <Tooltip title="Shuffle"><SwapOutlined /></Tooltip> },
           { value: "repeatTrack", label: <Tooltip title="Repeat one"><RedoOutlined /></Tooltip> },
           { value: "repeatAll", label: <Tooltip title="Repeat all"><RetweetOutlined /></Tooltip> },
         ]}
       />
-      {/* {mode === "shuffle" && (
-        <Tooltip title="Shuffle again">
+      { (
+        <Tooltip title="Shuffle">
           <Button
             type="text" size="small" icon={<SwapOutlined />}
             onClick={onReshuffle}
             style={{ marginLeft: 6, color: "#02ab21" }}
           />
         </Tooltip>
-      )} */}
+      )}
     </div>
   );
 }
