@@ -2,10 +2,10 @@ import streamlit as st
 
 GLOBAL_CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
 
 html, body, [class*="css"]  {
-    font-family: 'Poppins', sans-serif;
+    font-family: 'Be Vietnam Pro', sans-serif;
 }
 
 header[data-testid="stHeader"] {
@@ -46,7 +46,63 @@ footer:after {
 h1, h2, h3 {
     font-weight: 600;
 }
+.evol-hero {
+    text-align: center;
+    padding: 24px 12px 32px;
+}
+.evol-hero-title {
+    font-family: 'Be Vietnam Pro', sans-serif;
+    font-size: 3.2rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    background: linear-gradient(90deg, #02ab21, #3ddc57 45%, #02ab21);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: evol-shine 6s linear infinite;
+    margin-bottom: 18px;
+}
+@keyframes evol-shine {
+    to { background-position: 200% center; }
+}
+.evol-hero-quote p {
+    font-family: 'Be Vietnam Pro', sans-serif;
+    font-style: italic;
+    font-weight: 400;
+    font-size: 1.45rem;
+    line-height: 1.9;
+    color: #d8d8d8;
+    margin: 0 0 6px;
+    letter-spacing: 0.01em;
+}
+.evol-hero-quote p:last-child {
+    color: #02ab21;
+    font-weight: 600;
+    font-style: normal;
+}
 
+/* Facebook embed — cropped to just the photo, no like/comment/share bar
+   or comment box underneath. The iframe renders at its natural full
+   height (so the photo itself lays out correctly); the wrapper below it
+   just clips everything past FB_EMBED_VISIBLE_HEIGHT. */
+.evol-fb-embed {
+    max-width: 750px;
+    height: var(--fb-visible-height, 420px);
+    margin: 0 auto 20px;
+    overflow: hidden;
+    border-radius: 14px;
+    border: 1px solid #2a2a2a;
+    background: #161616;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+    position: relative;
+}
+.evol-fb-embed iframe {
+    max-width: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
 .evol-card {
     background: #161616;
     border: 1px solid #2a2a2a;

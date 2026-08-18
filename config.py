@@ -49,7 +49,28 @@ PLACE_ICON_CHOICES = {
     "🌊": "tint",
     "🎡": "ticket",
 }
-PLACE_ICON_COLORS = ["red", "blue", "green", "purple", "orange", "darkred", "cadetblue", "pink"]
 
 # Photobooth filters (must match keys handled in utils.image_filters.apply_filter)
 PHOTO_FILTERS = ["None", "Grayscale", "Sepia", "Invert", "Blur", "Vintage"]
+MENU_OPTIONS = [
+    "Home",
+    "Login",
+    "Music",
+    "About",
+    "His-tory",
+    "Relax",
+    "Map",
+    "Photobooth",
+    "???",
+]
+MENU_ICONS = [
+    "house",
+    "box-arrow-in-right",
+    "music-note-list",
+    "info-circle",
+    "clock-history",
+    "flower1",
+    "geo-alt",
+    "camera",
+    "lock",
+]
