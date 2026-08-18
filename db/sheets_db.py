@@ -1,18 +1,15 @@
 """Google Sheets–backed storage, replacing the old SQLite db/database.py.
 
-Perf notes (fixes for 429 "Quota exceeded" errors):
-  - The worksheet handle + its header row are cached via st.cache_resource,
-    so resolving a worksheet no longer costs a metadata fetch + header read
-    on every single call (previously ~2 extra API calls per op).
-  - update() batches all changed columns into ONE batch_update call instead
-    of one update_cell() call per column.
-  - Row-number lookups reuse the cached read (read_all), instead of doing a
-    fresh full-column ws.col_values() read every time.
-  - Cache invalidation is scoped to the table that changed, not global.
-  - Failed calls get a short exponential-backoff retry on 429s specifically.
+One spreadsheet (config.SPREADSHEET_ID), one worksheet (tab) per table. Row 1
+of each tab is the header. IDs are integers managed here (no autoincrement
+in Sheets); the `sessions` table uses its `token` column as the primary key
+instead.
+
+Auth: a service-account key at <project root>/credentials.json — the same
+file used by migrate_to_sheets.py. Share the target spreadsheet with that
+key's client_email as Editor.
 """
 import os
-import time
 
 import gspread
 import pandas as pd
@@ -29,19 +26,25 @@ SCOPES = [
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CREDENTIALS_PATH = os.path.join(ROOT_DIR, "credentials.json")
 
+# Tab name -> ordered column list. This is the *target* schema — used to
+# create a brand-new tab, and to backfill columns onto an existing tab that
+# predates a schema change (see _ensure_header). Once a tab exists, its
+# live header row (not this list's order) is what writes actually follow,
+# so adding a column here is safe even on a sheet with existing data.
 SCHEMA: dict[str, list[str]] = {
     "notes":  ["id", "content", "time"],
     "blog":   ["id", "content", "time"],
-    "places": ["id", "user_id", "name", "lat", "lon", "description", "icon", "tags", "time"],
+    "places": ["id", "user_id", "name", "lat", "lon", "description", "icon", "time"],
     "photos": ["id", "user_id", "filename", "caption", "filter", "time"],
     "users":  ["id", "username", "password_hash", "created_at"],
-    "sessions": ["token", "user_id", "created_at", "expires_at"],
+    "sessions": ["token", "user_id", "created_at", "expires_at"],  # token is the PK here
     "tracks": ["id", "title", "artist", "video_id", "youtube_url", "thumbnail_url",
                "lyrics_url", "added_by", "created_at"],
     "playlists": ["id", "user_id", "name", "created_at"],
     "playlist_tracks": ["id", "playlist_id", "track_id", "custom_title", "position", "added_at"],
 }
 
+# Columns that should come back as ints (not the strings Sheets stores).
 _INT_COLUMNS: dict[str, list[str]] = {
     "notes": ["id"],
     "blog": ["id"],
@@ -57,35 +60,20 @@ _FLOAT_COLUMNS: dict[str, list[str]] = {
     "places": ["lat", "lon"],
 }
 
-# How long a read_all() result is trusted before hitting the API again.
-# Bumped up from 5s — this app doesn't need near-real-time freshness, and
-# every second of TTL directly reduces API call volume.
-_READ_TTL = 30
-
-
-# ---------------------------------------------------------------------------
-# Retry wrapper — a short backoff specifically for 429s, so a transient
-# rate-limit blip doesn't crash the page.
-# ---------------------------------------------------------------------------
-
-def _with_retry(fn, *args, **kwargs):
-    delays = [1, 2, 4]
-    for i, delay in enumerate(delays + [None]):
-        try:
-            return fn(*args, **kwargs)
-        except gspread.exceptions.APIError as e:
-            is_429 = getattr(e, "response", None) is not None and e.response.status_code == 429
-            if not is_429 or delay is None:
-                raise
-            time.sleep(delay)
-
-
-# ---------------------------------------------------------------------------
-# Auth / spreadsheet handles
-# ---------------------------------------------------------------------------
 
 @st.cache_resource
 def _client() -> gspread.Client:
+    """Auth two ways, tried in order:
+
+    1. DEPLOY: a [gcp_service_account] block in st.secrets — how you'll run
+       this on Streamlit Community Cloud, since you can't commit
+       credentials.json to a public/private repo. Paste the *same* JSON
+       key's fields into the app's Secrets panel (see the deploy guide).
+    2. DEV: a local credentials.json file at the project root — what you
+       already have set up for local runs and migrate_to_sheets.py.
+
+    No code change needed between environments — whichever is present wins.
+    """
     try:
         if "gcp_service_account" in st.secrets:
             creds = Credentials.from_service_account_info(
@@ -93,7 +81,7 @@ def _client() -> gspread.Client:
             )
             return gspread.authorize(creds)
     except Exception:
-        pass
+        pass  # no secrets.toml at all locally — that's fine, fall through
 
     if os.path.exists(CREDENTIALS_PATH):
         creds = Credentials.from_service_account_file(CREDENTIALS_PATH, scopes=SCOPES)
@@ -107,6 +95,8 @@ def _client() -> gspread.Client:
 
 
 def _spreadsheet_id() -> str:
+    """DEPLOY: st.secrets['sheets']['spreadsheet_id'] if set.
+    DEV fallback: config.SPREADSHEET_ID."""
     try:
         if "sheets" in st.secrets and st.secrets["sheets"].get("spreadsheet_id"):
             return st.secrets["sheets"]["spreadsheet_id"]
@@ -117,87 +107,50 @@ def _spreadsheet_id() -> str:
 
 @st.cache_resource
 def _spreadsheet():
-    return _with_retry(_client().open_by_key, _spreadsheet_id())
+    return _client().open_by_key(_spreadsheet_id())
 
 
 def _pk(table: str) -> str:
     return "token" if table == "sessions" else "id"
 
 
-# ---------------------------------------------------------------------------
-# Worksheet handle + header, cached together so resolving/ensuring a table
-# costs API calls exactly ONCE per table per app process — not once per
-# read/write like before.
-# ---------------------------------------------------------------------------
-
-@st.cache_resource
-def _worksheet_and_header(table: str):
+def _worksheet(table: str):
     ss = _spreadsheet()
     try:
-        ws = _with_retry(ss.worksheet, table)
+        ws = ss.worksheet(table)
     except gspread.WorksheetNotFound:
-        ws = _with_retry(ss.add_worksheet, title=table, rows=1000, cols=max(len(SCHEMA[table]), 1))
-        _with_retry(ws.append_row, SCHEMA[table])
-        return ws, list(SCHEMA[table])
-
-    header = _with_retry(ws.row_values, 1)
-    missing = [c for c in SCHEMA[table] if c not in header]
-    if missing:
-        header = header + missing
-        _with_retry(ws.update, "A1", [header])
-    return ws, header
-
-
-def _worksheet(table: str):
-    ws, _ = _worksheet_and_header(table)
+        ws = ss.add_worksheet(title=table, rows=1000, cols=max(len(SCHEMA[table]), 1))
+        ws.append_row(SCHEMA[table])
+        return ws
+    _ensure_header(ws, table)
     return ws
 
 
-def _header(table: str) -> list[str]:
-    _, header = _worksheet_and_header(table)
-    return header
-
-
-def _refresh_worksheet_cache(table: str) -> None:
-    """Call only if you suspect the live header changed underneath us
-    (e.g. someone edited the sheet by hand) — forces one re-check."""
-    _worksheet_and_header.clear()
+def _ensure_header(ws, table: str) -> None:
+    """If SCHEMA gained columns since this tab was created (e.g. adding
+    `user_id` to an existing `places` tab), append the missing ones to the
+    live header row. Appending — never reordering — means existing rows and
+    column positions are untouched; old rows just read back with an empty
+    value for the new column until you backfill them."""
+    header = ws.row_values(1)
+    missing = [c for c in SCHEMA[table] if c not in header]
+    if missing:
+        ws.update("A1", [header + missing])
 
 
 # ---------------------------------------------------------------------------
-# Reads — cached, scoped invalidation per table.
+# Reads — cached briefly so a page that reads several tables in one rerun
+# doesn't burn one API call per read, and rapid reruns don't hammer the API.
+# Every write below clears this cache.
 # ---------------------------------------------------------------------------
 
-@st.cache_data(ttl=_READ_TTL, show_spinner=False)
+@st.cache_data(ttl=5, show_spinner=False)
 def _read_records(table: str) -> list[dict]:
-    ws = _worksheet(table)
-    return _with_retry(ws.get_all_records)
+    return _worksheet(table).get_all_records()
 
 
-def _invalidate(table: str) -> None:
-    """Clear the cache for just this one table, not every table."""
-    _read_records.clear(table)
-
-
-def _normalize_decimal(value):
-    """Sheets data is free-text under the hood — a cell can end up with a
-    comma decimal separator (e.g. '21,0285' from a locale mismatch) instead
-    of a dot. pd.to_numeric() would silently turn that into NaN rather than
-    erroring, so fix it up first:
-      - both ',' and '.' present  -> assume ',' is a thousands separator, drop it
-      - only ','                  -> assume it's the decimal separator, swap to '.'
-      - otherwise                 -> leave as-is
-    """
-    if not isinstance(value, str):
-        return value
-    v = value.strip()
-    if not v:
-        return v
-    if "," in v and "." in v:
-        return v.replace(",", "")
-    if "," in v:
-        return v.replace(",", ".")
-    return v
+def _invalidate() -> None:
+    _read_records.clear()
 
 
 def read_all(table: str) -> pd.DataFrame:
@@ -208,17 +161,8 @@ def read_all(table: str) -> pd.DataFrame:
             df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int64")
     for col in _FLOAT_COLUMNS.get(table, []):
         if col in df.columns:
-            df[col] = df[col].map(_normalize_decimal)
             df[col] = pd.to_numeric(df[col], errors="coerce")
     return df
-
-def read_many(tables: list[str]) -> dict[str, pd.DataFrame]:
-    """Read several tables in one shot. Each table is still served from its
-    own 30s cache when warm, so this mainly helps the *first* read of a
-    page that needs several tables (e.g. a playlist detail view needing
-    both `playlist_tracks` and `tracks`) by avoiding sequential round trips
-    hitting a cold cache back-to-back."""
-    return {t: read_all(t) for t in tables}
 
 
 # ---------------------------------------------------------------------------
@@ -233,69 +177,97 @@ def _next_id(table: str) -> int:
 
 
 def insert(table: str, row: dict) -> dict:
+    """Insert a row (column -> value). Auto-fills 'id' for every table
+    except `sessions` (whose PK, `token`, the caller must supply). Returns
+    the row as stored, including the generated id.
+
+    For inserting many rows at once, use insert_many() instead — this
+    single-row version does its own read (for the next id) plus an
+    append, i.e. ~2 Sheets API calls *per call*, which is fine for one-off
+    inserts but adds up fast in a loop (see insert_many's docstring)."""
     pk = _pk(table)
     if pk == "id" and "id" not in row:
         row = {**row, "id": _next_id(table)}
 
     ws = _worksheet(table)
-    header = _header(table)  # cached — no extra API call
+    header = ws.row_values(1)  # live header, not SCHEMA — see _ensure_header
     ordered = [row.get(col, "") for col in header]
-    _with_retry(ws.append_row, ordered, value_input_option="USER_ENTERED")
-    _invalidate(table)
+    ws.append_row(ordered, value_input_option="USER_ENTERED")
+    _invalidate()
     return row
 
 
-def _find_row(table: str, pk_value) -> int | None:
-    """1-indexed sheet row number for pk_value, using the cached read
-    instead of a fresh full-column API read."""
-    pk_col = _pk(table)
-    records = _read_records(table)
-    for i, rec in enumerate(records):
-        if str(rec.get(pk_col)) == str(pk_value):
-            return i + 2  # +1 for header row, +1 for 1-indexing
+def insert_many(table: str, rows: list[dict]) -> list[dict]:
+    """Bulk insert — appends every row in ONE Sheets API call
+    (`append_rows`) instead of one call per row like insert() does in a
+    loop. Auto-fills sequential 'id' values for every table except
+    `sessions` (whose PK, `token`, callers must already supply per-row).
+
+    This matters more than it might look: insert() in a loop of N calls
+    is ~2N Sheets API calls (a read for the next id + an append, each
+    time), which for a large batch (e.g. importing a 100-track YouTube
+    playlist) is slow enough to be noticeable and can run into Sheets'
+    per-minute rate limit — which manifests as later rows in the loop
+    silently failing or the whole run stalling out. insert_many computes
+    every id from a single read up front, then does exactly one
+    "read header" + one "append" call no matter how many rows.
+
+    Returns the rows as stored (same order as given), each with its
+    generated id filled in.
+    """
+    if not rows:
+        return []
+
+    pk = _pk(table)
+    ws = _worksheet(table)
+    header = ws.row_values(1)  # live header, not SCHEMA — see _ensure_header
+
+    out_rows: list[dict] = []
+    if pk == "id":
+        next_id = _next_id(table)
+        for row in rows:
+            if "id" not in row:
+                row = {**row, "id": next_id}
+                next_id += 1
+            out_rows.append(row)
+    else:
+        out_rows = list(rows)
+
+    values = [[r.get(col, "") for col in header] for r in out_rows]
+    ws.append_rows(values, value_input_option="USER_ENTERED")
+    _invalidate()
+    return out_rows
+
+
+def _row_number(ws, pk_col: str, pk_value) -> int | None:
+    """1-indexed sheet row number for the record with this PK, or None."""
+    header = ws.row_values(1)
+    col_idx = header.index(pk_col) + 1
+    col_values = ws.col_values(col_idx)
+    for i, v in enumerate(col_values[1:], start=2):  # skip header row
+        if str(v) == str(pk_value):
+            return i
     return None
 
 
-def _row_number(table: str, pk_value) -> int | None:
-    row = _find_row(table, pk_value)
-    if row is None:
-        # Cache might just be stale (e.g. row inserted a moment ago) —
-        # force one fresh read and try again, instead of silently no-op'ing.
-        _invalidate(table)
-        row = _find_row(table, pk_value)
-    return row
-
-
 def update(table: str, pk_value, changes: dict) -> None:
-    """Update selected columns on the row matching pk_value — batched into
-    a single API call instead of one update_cell() per column."""
-    if not changes:
-        return
+    """Update selected columns on the row matching pk_value."""
     ws = _worksheet(table)
-    row_num = _row_number(table, pk_value)
+    row_num = _row_number(ws, _pk(table), pk_value)
     if row_num is None:
         return
-    header = _header(table)
-
-    data = []
+    header = ws.row_values(1)
     for col, value in changes.items():
-        if col not in header:
-            continue
-        col_idx = header.index(col) + 1
-        a1 = gspread.utils.rowcol_to_a1(row_num, col_idx)
-        data.append({"range": a1, "values": [[value]]})
-
-    if data:
-        _with_retry(ws.batch_update, data, value_input_option="USER_ENTERED")
-    _invalidate(table)
+        ws.update_cell(row_num, header.index(col) + 1, value)
+    _invalidate()
 
 
 def delete(table: str, pk_value) -> None:
     ws = _worksheet(table)
-    row_num = _row_number(table, pk_value)
+    row_num = _row_number(ws, _pk(table), pk_value)
     if row_num:
-        _with_retry(ws.delete_rows, row_num)
-        _invalidate(table)
+        ws.delete_rows(row_num)
+        _invalidate()
 
 
 def delete_where(table: str, column: str, value) -> None:
@@ -308,8 +280,9 @@ def delete_where(table: str, column: str, value) -> None:
         return
     ws = _worksheet(table)
     pk_col = _pk(table)
+    # delete bottom-up so earlier row numbers don't shift under us
     for pk_value in sorted(matches[pk_col].tolist(), reverse=True):
-        row_num = _row_number(table, pk_value)
+        row_num = _row_number(ws, pk_col, pk_value)
         if row_num:
-            _with_retry(ws.delete_rows, row_num)
-    _invalidate(table)
+            ws.delete_rows(row_num)
+    _invalidate()

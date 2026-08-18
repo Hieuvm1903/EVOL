@@ -30,14 +30,11 @@ def _sort_playlists(df, sort_choice: str):
 # Playlist list view
 # ---------------------------------------------------------------------------
 
-
 @st.dialog("Create a new playlist")
 def _new_playlist_dialog(user_id: int) -> None:
     c1, c2 = st.columns([3, 1], vertical_alignment="bottom")
     name = c1.text_input("Playlist name", key="new_playlist_dialog_name")
-    if c2.button(
-        "Create", type="primary", icon=":material/add:", use_container_width=True
-    ):
+    if c2.button("Create", type="primary", icon=":material/add:", use_container_width=True):
         if name.strip():
             music_service.create_playlist(user_id, name.strip())
             st.rerun()
@@ -49,17 +46,12 @@ def _new_playlist_dialog(user_id: int) -> None:
 def _import_playlist_dialog(user_id: int) -> None:
     st.caption(
         "Paste JSON exported from EVOL Space's Export button, or plain text "
-        'with one "Title - URL" per line. Great for sharing a playlist '
+        "with one \"Title - URL\" per line. Great for sharing a playlist "
         "between accounts."
     )
     c1, c2 = st.columns([3, 1], vertical_alignment="bottom")
     raw = c1.text_area("Playlist data", height=160, key="import_playlist_raw")
-    if c2.button(
-        "Import",
-        type="primary",
-        icon=":material/file_upload:",
-        use_container_width=True,
-    ):
+    if c2.button("Import", type="primary", icon=":material/file_upload:", use_container_width=True):
         if not raw.strip():
             st.warning("Paste something first.")
         else:
@@ -91,42 +83,26 @@ def _render_playlist_row(row, all_playlists) -> None:
 
         if c_name.button(
             f":material/music_note: **{row['name']}**",
-            key=f"open_row_{pid}",
-            use_container_width=True,
+            key=f"open_row_{pid}", use_container_width=True,
         ):
             st.session_state["music_view"] = "detail"
             st.session_state["music_selected_playlist_id"] = pid
             st.rerun()
 
-        if c_play.button(
-            "",
-            key=f"list_play_{pid}",
-            icon=":material/play_arrow:",
-            help="Play",
-            use_container_width=True,
-        ):
+        if c_play.button("", key=f"list_play_{pid}", icon=":material/play_arrow:",
+                          help="Play", use_container_width=True):
             _play_from_list(pid, "Normal")
 
-        if c_shuffle.button(
-            "",
-            key=f"list_shuffle_{pid}",
-            icon=":material/shuffle:",
-            help="Shuffle play",
-            use_container_width=True,
-        ):
+        if c_shuffle.button("", key=f"list_shuffle_{pid}", icon=":material/shuffle:",
+                             help="Shuffle play", use_container_width=True):
             _play_from_list(pid, "Shuffle")
 
-        if c_repeat.button(
-            "",
-            key=f"list_repeat_{pid}",
-            icon=":material/repeat:",
-            help="Repeat all",
-            use_container_width=True,
-        ):
+        if c_repeat.button("", key=f"list_repeat_{pid}", icon=":material/repeat:",
+                            help="Repeat all", use_container_width=True):
             _play_from_list(pid, "Repeat All")
 
         with c_menu:
-            with st.popover("", icon=":material/more_vert:", width = 1000):
+            with st.popover("", icon=":material/more_vert:", use_container_width=True):
                 st.caption("Copy tracks from another playlist")
                 others = all_playlists[all_playlists["id"] != pid]
                 if others.empty:
@@ -134,32 +110,19 @@ def _render_playlist_row(row, all_playlists) -> None:
                 else:
                     opts = {r["name"]: int(r["id"]) for _, r in others.iterrows()}
                     src_name = st.selectbox(
-                        "Source",
-                        list(opts.keys()),
-                        key=f"copysrc_{pid}",
-                        label_visibility="collapsed",
+                        "Source", list(opts.keys()), key=f"copysrc_{pid}", label_visibility="collapsed"
                     )
-                    if st.button(
-                        "Copy tracks",
-                        key=f"copybtn_{pid}",
-                        icon=":material/content_copy:",
-                        use_container_width=True,
-                    ):
+                    if st.button("Copy tracks", key=f"copybtn_{pid}", icon=":material/content_copy:",
+                                 use_container_width=True):
                         added = music_service.copy_playlist_tracks(opts[src_name], pid)
                         st.success(f"Copied {added} new track(s).")
                         st.rerun()
 
-                st.divider()
                 st.caption("Export / share")
-                _render_export_controls(pid, key_suffix=f"list_{pid}", code_height=200)
+                _render_export_controls(pid, key_suffix=f"list_{pid}", code_height=120)
 
-                st.divider()
-                if st.button(
-                    "Delete playlist",
-                    key=f"delete_{pid}",
-                    icon=":material/delete:",
-                    use_container_width=True,
-                ):
+                if st.button("Delete playlist", key=f"delete_{pid}", icon=":material/delete:",
+                             use_container_width=True):
                     music_service.delete_playlist(pid)
                     st.rerun()
 
@@ -174,10 +137,8 @@ def _render_playlist_list(user_id: int) -> None:
             _import_playlist_dialog(user_id)
     with top3:
         search = st.text_input(
-            "Find by name",
-            label_visibility="collapsed",
-            placeholder="Search playlists...",
-            icon=":material/search:",
+            "Find by name", label_visibility="collapsed",
+            placeholder="Search playlists...", icon=":material/search:",
         )
 
     playlists = music_service.get_playlists(user_id)
@@ -187,21 +148,13 @@ def _render_playlist_list(user_id: int) -> None:
 
     filtered = playlists
     if search.strip():
-        filtered = playlists[
-            playlists["name"].str.contains(search.strip(), case=False, na=False)
-        ]
+        filtered = playlists[playlists["name"].str.contains(search.strip(), case=False, na=False)]
         if filtered.empty:
             st.caption(f'No playlists match "{search.strip()}".')
 
-    sort_choice = (
-        st.segmented_control(
-            "Sort by",
-            _SORT_OPTIONS,
-            default="Newest first",
-            key="playlist_sort",
-        )
-        or "Newest first"
-    )
+    sort_choice = st.segmented_control(
+        "Sort by", _SORT_OPTIONS, default="Newest first", key="playlist_sort",
+    ) or "Newest first"
     filtered = _sort_playlists(filtered, sort_choice)
 
     for _, row in filtered.iterrows():
@@ -213,37 +166,21 @@ def _render_playlist_list(user_id: int) -> None:
 # Playlist detail view
 # ---------------------------------------------------------------------------
 
-
 def _render_play_controls(tracks, key_prefix: str) -> None:
     c1, c2, c3 = st.columns(3, gap="small")
-    if c1.button(
-        "Play",
-        key=f"{key_prefix}_play",
-        icon=":material/play_arrow:",
-        use_container_width=True,
-    ):
+    if c1.button("Play", key=f"{key_prefix}_play", icon=":material/play_arrow:", use_container_width=True):
         if tracks.empty:
             st.warning("This playlist is empty.")
         else:
             _load_queue(tracks, "Normal")
             st.rerun()
-    if c2.button(
-        "Shuffle",
-        key=f"{key_prefix}_shuffle",
-        icon=":material/shuffle:",
-        use_container_width=True,
-    ):
+    if c2.button("Shuffle", key=f"{key_prefix}_shuffle", icon=":material/shuffle:", use_container_width=True):
         if tracks.empty:
             st.warning("This playlist is empty.")
         else:
             _load_queue(tracks, "Shuffle")
             st.rerun()
-    if c3.button(
-        "Repeat all",
-        key=f"{key_prefix}_repeat",
-        icon=":material/repeat:",
-        use_container_width=True,
-    ):
+    if c3.button("Repeat all", key=f"{key_prefix}_repeat", icon=":material/repeat:", use_container_width=True):
         if tracks.empty:
             st.warning("This playlist is empty.")
         else:
@@ -257,11 +194,7 @@ def _play_track_from_here(tracks_df, track_id: int) -> None:
         return
     pos = tracks_df.index.get_loc(matches[0])
     subset = tracks_df.iloc[pos:]
-    current_mode = (
-        st.session_state.get("music_mode", "Normal")
-        if st.session_state.get("music_queue")
-        else "Normal"
-    )
+    current_mode = st.session_state.get("music_mode", "Normal") if st.session_state.get("music_queue") else "Normal"
     _load_queue(subset, current_mode)
     st.rerun()
 
@@ -288,70 +221,55 @@ def _play_track_next(track_row) -> None:
 
 def _render_track_row(playlist_id: int, tracks_df, t) -> None:
     tid = int(t["id"])
+    # An empty cell from Google Sheets comes back through pandas as NaN
+    # (a float), not "". bool(NaN) is True in Python, so a plain
+    # `if t.get("lyrics_url"):` check was passing for empty cells too,
+    # and st.link_button/.text_input then errored trying to use a float
+    # as a URL/value — which aborted the whole page mid-render, which is
+    # why only the first track (the one that happened to have a real
+    # string there) ever showed up. Coerce to "" up front instead.
+    artist = t.get("artist")
+    artist = artist if isinstance(artist, str) else ""
+    lyrics_url = t.get("lyrics_url")
+    lyrics_url = lyrics_url if isinstance(lyrics_url, str) else ""
+
     # Same "keep this row on one line" trick as playlist rows.
     with st.container(key=f"trk_row_{playlist_id}_{tid}"):
-        tc_title, tc_play, tc_menu = st.columns(
-            [6, 1, 1], vertical_alignment="center", gap="small"
-        )
+        tc_title, tc_play, tc_menu = st.columns([6, 1, 1], vertical_alignment="center", gap="small")
 
-        if t.get("artist"):
-            tc_title.markdown(f"{t['title']}  \n:gray[{t['artist']}]")
+        if artist.strip():
+            tc_title.markdown(f"{t['title']}  \n:gray[{artist}]")
         else:
             tc_title.write(t["title"])
 
-        if tc_play.button(
-            "",
-            key=f"trackplay_{playlist_id}_{tid}",
-            icon=":material/play_arrow:",
-            help="Play from here",
-            use_container_width=True,
-        ):
+        if tc_play.button("", key=f"trackplay_{playlist_id}_{tid}", icon=":material/play_arrow:",
+                           help="Play from here", use_container_width=True):
             _play_track_from_here(tracks_df, tid)
 
         with tc_menu:
             with st.popover("", icon=":material/more_vert:", use_container_width=True):
-                # if st.button(
-                #     "Play next",
-                #     key=f"tracknext_{playlist_id}_{tid}",
-                #     icon=":material/queue_play_next:",
-                #     use_container_width=True,
-                # ):
-                #     _play_track_next(t)
+                if st.button("Play next", key=f"tracknext_{playlist_id}_{tid}",
+                             icon=":material/queue_play_next:", use_container_width=True):
+                    _play_track_next(t)
 
-                st.divider()
                 st.caption("Artist / lyrics (library-wide)")
                 new_artist = st.text_input(
-                    "Artist",
-                    value=t.get("artist", "") or "",
+                    "Artist", value=artist,
                     key=f"artist_{playlist_id}_{tid}",
                 )
                 lc1, lc2 = st.columns([3, 1], vertical_alignment="bottom")
                 new_lyrics = lc1.text_input(
-                    "Lyrics URL",
-                    value=t.get("lyrics_url", "") or "",
-                    key=f"lyrics_{playlist_id}_{tid}",
-                    placeholder="https://...",
+                    "Lyrics URL", value=lyrics_url,
+                    key=f"lyrics_{playlist_id}_{tid}", placeholder="https://...",
                 )
-                if lc2.button(
-                    "",
-                    key=f"trackinfo_save_{playlist_id}_{tid}",
-                    icon=":material/save:",
-                    help="Save artist & lyrics URL",
-                    use_container_width=True,
-                ):
-                    music_service.update_track_details(
-                        tid, artist=new_artist, lyrics_url=new_lyrics
-                    )
+                if lc2.button("", key=f"trackinfo_save_{playlist_id}_{tid}", icon=":material/save:",
+                              help="Save artist & lyrics URL", use_container_width=True):
+                    music_service.update_track_details(tid, artist=new_artist, lyrics_url=new_lyrics)
                     st.rerun()
-                if t.get("lyrics_url"):
-                    st.link_button(
-                        "Open lyrics",
-                        f"https://lrclib.net/api/get/" + str(t["lyrics_url"]),
-                        icon=":material/lyrics:",
-                        use_container_width=True,
-                    )
+                if lyrics_url.strip():
+                    st.link_button("Open lyrics", lyrics_url, icon=":material/lyrics:",
+                                    use_container_width=True)
 
-                st.divider()
                 is_renamed = t["title"] != t["original_title"]
                 st.caption(f"Rename in this playlist (library: {t['original_title']})")
                 if is_renamed:
@@ -360,85 +278,55 @@ def _render_track_row(playlist_id: int, tracks_df, t) -> None:
                     rc1, rc2 = st.columns([3, 1], vertical_alignment="bottom")
                     rc3 = None
                 new_title = rc1.text_input(
-                    "New name",
-                    value=t["title"],
-                    key=f"renametrack_{playlist_id}_{tid}",
-                    label_visibility="collapsed",
+                    "New name", value=t["title"],
+                    key=f"renametrack_{playlist_id}_{tid}", label_visibility="collapsed",
                 )
-                if rc2.button(
-                    "",
-                    key=f"renametracksave_{playlist_id}_{tid}",
-                    icon=":material/save:",
-                    help="Save",
-                    use_container_width=True,
-                ):
+                if rc2.button("", key=f"renametracksave_{playlist_id}_{tid}", icon=":material/save:",
+                              help="Save", use_container_width=True):
                     music_service.rename_track_in_playlist(playlist_id, tid, new_title)
                     st.rerun()
-                if is_renamed and rc3.button(
-                    "",
-                    key=f"renametrackreset_{playlist_id}_{tid}",
-                    icon=":material/restart_alt:",
-                    help="Reset to library title",
-                    use_container_width=True,
-                ):
+                if is_renamed and rc3.button("", key=f"renametrackreset_{playlist_id}_{tid}",
+                                              icon=":material/restart_alt:", help="Reset to library title",
+                                              use_container_width=True):
                     music_service.reset_track_title_in_playlist(playlist_id, tid)
                     st.rerun()
 
-                st.divider()
-                if st.button(
-                    "Remove from playlist",
-                    key=f"rm_{playlist_id}_{tid}",
-                    icon=":material/delete:",
-                    use_container_width=True,
-                ):
+                if st.button("Remove from playlist", key=f"rm_{playlist_id}_{tid}",
+                             icon=":material/delete:", use_container_width=True):
                     music_service.remove_track_from_playlist(playlist_id, tid)
                     st.rerun()
 
 
 def _render_add_track(playlist_id: int, user_id: int, existing_ids: set) -> None:
     with st.expander("Add track", icon=":material/add:", expanded=False):
-        tab_search, tab_link = st.tabs(
-            [":material/search: Search", ":material/link: Paste link"]
-        )
+        tab_search, tab_link, tab_playlist = st.tabs([
+            ":material/search: Search",
+            ":material/link: Paste link",
+            ":material/queue_music: YT playlist",
+        ])
 
         with tab_search:
             with st.form(key=f"search_form_{playlist_id}"):
                 sc1, sc2 = st.columns([3, 1], vertical_alignment="bottom")
-                query = sc1.text_input(
-                    "Search songs",
-                    key=f"search_q_{playlist_id}",
-                    placeholder="song title or artist...",
-                    icon=":material/search:",
-                )
-                search_clicked = sc2.form_submit_button(
-                    "Search", icon=":material/search:", use_container_width=True
-                )
+                query = sc1.text_input("Search songs", key=f"search_q_{playlist_id}",
+                                        placeholder="song title or artist...", icon=":material/search:")
+                search_clicked = sc2.form_submit_button("Search", icon=":material/search:",
+                                                         use_container_width=True)
             if search_clicked and query.strip():
                 with st.spinner("Searching..."):
-                    st.session_state[f"search_results_{playlist_id}"] = (
-                        ytmusic_search.search_songs(query.strip())
-                    )
+                    st.session_state[f"search_results_{playlist_id}"] = ytmusic_search.search_songs(query.strip())
 
             results = st.session_state.get(f"search_results_{playlist_id}", [])
             for r in results:
-                rc1, rc2, rc3 = st.columns(
-                    [1, 4, 1], vertical_alignment="center", gap="small"
-                )
+                rc1, rc2, rc3 = st.columns([1, 4, 1], vertical_alignment="center", gap="small")
                 if r["thumbnail_url"]:
                     rc1.image(r["thumbnail_url"], width=56)
                 rc2.markdown(f"**{r['title']}**  \n{r['artist']} · {r['duration']}")
-                if rc3.button(
-                    "",
-                    key=f"searchadd_{playlist_id}_{r['video_id']}",
-                    icon=":material/add:",
-                ):
+                if rc3.button("", key=f"searchadd_{playlist_id}_{r['video_id']}", icon=":material/add:"):
                     url = f"https://www.youtube.com/watch?v={r['video_id']}"
                     ok, msg, _ = music_service.add_track_and_attach(
-                        playlist_id,
-                        url,
-                        user_id,
-                        known_title=r["title"],
-                        known_thumbnail=r["thumbnail_url"],
+                        playlist_id, url, user_id,
+                        known_title=r["title"], known_thumbnail=r["thumbnail_url"],
                         known_artist=r["artist"],
                     )
                     (st.success if ok else st.error)(msg)
@@ -446,92 +334,111 @@ def _render_add_track(playlist_id: int, user_id: int, existing_ids: set) -> None
                         st.rerun()
 
         with tab_link:
-            url = st.text_input(
-                "YouTube link",
-                key=f"add_url_{playlist_id}",
-                placeholder="https://www.youtube.com/watch?v=...",
-                icon=":material/link:",
-            )
+            url = st.text_input("YouTube link", key=f"add_url_{playlist_id}",
+                                 placeholder="https://www.youtube.com/watch?v=...", icon=":material/link:")
             tc1, tc2 = st.columns([3, 1], vertical_alignment="bottom")
-            title_override = tc1.text_input(
-                "Title (optional)", key=f"add_title_{playlist_id}"
-            )
-            if tc2.button(
-                "Fetch & add",
-                key=f"add_btn_{playlist_id}",
-                icon=":material/add:",
-                use_container_width=True,
-            ):
+            title_override = tc1.text_input("Title (optional)", key=f"add_title_{playlist_id}")
+            if tc2.button("Fetch & add", key=f"add_btn_{playlist_id}", icon=":material/add:",
+                          use_container_width=True):
                 if not url.strip():
                     st.warning("Paste a YouTube link first.")
                 else:
                     ok, msg, _ = music_service.add_track_and_attach(
-                        playlist_id,
-                        url.strip(),
-                        user_id,
-                        known_title=title_override.strip() or None,
+                        playlist_id, url.strip(), user_id, known_title=title_override.strip() or None,
                     )
                     (st.success if ok else st.error)(msg)
                     if ok:
                         st.rerun()
 
+        with tab_playlist:
+            st.caption("Search for a playlist, or paste a playlist link directly, to add every track in it at once.")
+
+            with st.form(key=f"playlist_search_form_{playlist_id}"):
+                psc1, psc2 = st.columns([3, 1], vertical_alignment="bottom")
+                playlist_query = psc1.text_input(
+                    "Search playlists", key=f"playlist_q_{playlist_id}",
+                    placeholder="playlist name...", icon=":material/search:",
+                )
+                playlist_search_clicked = psc2.form_submit_button(
+                    "Search", icon=":material/search:", use_container_width=True,
+                )
+            if playlist_search_clicked and playlist_query.strip():
+                with st.spinner("Searching..."):
+                    st.session_state[f"playlist_results_{playlist_id}"] = \
+                        ytmusic_search.search_playlists(playlist_query.strip())
+
+            playlist_results = st.session_state.get(f"playlist_results_{playlist_id}", [])
+            for pr in playlist_results:
+                prc1, prc2, prc3 = st.columns([1, 4, 1], vertical_alignment="center", gap="small")
+                if pr["thumbnail_url"]:
+                    prc1.image(pr["thumbnail_url"], width=56)
+                count_label = f" · {pr['item_count']} tracks" if pr["item_count"] else ""
+                prc2.markdown(f"**{pr['title']}**  \n{pr['author']}{count_label}")
+                if prc3.button("", key=f"playlistadd_{playlist_id}_{pr['playlist_id']}",
+                               icon=":material/playlist_add:", help="Import this playlist",
+                               use_container_width=True):
+                    with st.spinner("Adding tracks..."):
+                        ok, msg, _added = music_service.add_playlist_from_youtube(
+                            playlist_id,
+                            f"https://www.youtube.com/playlist?list={pr['playlist_id']}",
+                            user_id,
+                        )
+                    (st.success if ok else st.error)(msg)
+                    if ok:
+                        st.rerun()
+            if playlist_search_clicked and playlist_query.strip() and not playlist_results:
+                st.caption(f'No importable playlists found for "{playlist_query.strip()}".')
+
+            st.caption("Or paste a playlist link directly")
+            with st.form(key=f"add_playlist_form_{playlist_id}"):
+                yc1, yc2 = st.columns([3, 1], vertical_alignment="bottom")
+                playlist_url = yc1.text_input(
+                    "YouTube playlist link", key=f"add_playlist_url_{playlist_id}",
+                    placeholder="https://www.youtube.com/playlist?list=...", icon=":material/link:",
+                )
+                import_clicked = yc2.form_submit_button(
+                    "Add all", icon=":material/playlist_add:", use_container_width=True,
+                )
+            if import_clicked:
+                if not playlist_url.strip():
+                    st.warning("Paste a YouTube playlist link first.")
+                else:
+                    with st.spinner("Reading playlist..."):
+                        ok, msg, _added = music_service.add_playlist_from_youtube(
+                            playlist_id, playlist_url.strip(), user_id,
+                        )
+                    (st.success if ok else st.error)(msg)
+                    if ok:
+                        st.rerun()
+
         library = music_service.get_all_tracks()
-        addable = (
-            library[~library["id"].isin(existing_ids)] if not library.empty else library
-        )
+        addable = library[~library["id"].isin(existing_ids)] if not library.empty else library
         if addable is not None and not addable.empty:
             opts = {r["title"]: r["id"] for _, r in addable.iterrows()}
             pc1, pc2 = st.columns([3, 1], vertical_alignment="bottom")
-            pick = pc1.selectbox(
-                "Or add from your library",
-                ["—"] + list(opts.keys()),
-                key=f"pick_{playlist_id}",
-            )
-            if pick != "—" and pc2.button(
-                "Add selected",
-                key=f"add_lib_{playlist_id}",
-                icon=":material/add:",
-                use_container_width=True,
-            ):
+            pick = pc1.selectbox("Or add from your library", ["—"] + list(opts.keys()), key=f"pick_{playlist_id}")
+            if pick != "—" and pc2.button("Add selected", key=f"add_lib_{playlist_id}",
+                                           icon=":material/add:", use_container_width=True):
                 music_service.add_track_to_playlist(playlist_id, opts[pick])
                 st.rerun()
 
 
-def _render_export_controls(
-    playlist_id: int, key_suffix: str, code_height: int | None = None
-) -> None:
+def _render_export_controls(playlist_id: int, key_suffix: str, code_height: int | None = None) -> None:
     fc1, fc2 = st.columns([3, 1], vertical_alignment="bottom")
-    fmt = (
-        fc1.segmented_control(
-            "Format",
-            ["JSON", "Plain text"],
-            default="JSON",
-            key=f"export_fmt_{key_suffix}",
-        )
-        or "JSON"
-    )
-    content = (
-        music_service.export_playlist_json(playlist_id)
-        if fmt == "JSON"
-        else music_service.export_playlist_text(playlist_id)
-    )
+    fmt = fc1.segmented_control(
+        "Format", ["JSON", "Plain text"], default="JSON", key=f"export_fmt_{key_suffix}",
+    ) or "JSON"
+    content = (music_service.export_playlist_json(playlist_id) if fmt == "JSON"
+               else music_service.export_playlist_text(playlist_id))
     with fc2:
         st.download_button(
-            "",
-            data=content,
+            "", data=content,
             file_name=f"playlist.{'json' if fmt == 'JSON' else 'txt'}",
             mime="application/json" if fmt == "JSON" else "text/plain",
-            icon=":material/download:",
-            key=f"export_dl_{key_suffix}",
-            width="content"
+            icon=":material/download:", key=f"export_dl_{key_suffix}",
+            use_container_width=True,
         )
-    st.code(
-        content,
-        language=("json" if fmt == "JSON" else None),
-        wrap_lines=True,
-        height=code_height,
-        width=500
-    )
+    st.code(content, language=("json" if fmt == "JSON" else None), wrap_lines=True, height=code_height)
 
 
 def _render_playlist_detail(user_id: int, playlist_id: int) -> None:
@@ -549,17 +456,11 @@ def _render_playlist_detail(user_id: int, playlist_id: int) -> None:
 
     name_col, save_col = st.columns([4, 1], vertical_alignment="bottom", gap="small")
     new_name = name_col.text_input(
-        "Playlist name",
-        value=current_name,
-        key=f"rename_input_{playlist_id}",
+        "Playlist name", value=current_name, key=f"rename_input_{playlist_id}",
         icon=":material/edit:",
     )
-    if save_col.button(
-        "Save",
-        key=f"rename_save_{playlist_id}",
-        icon=":material/save:",
-        use_container_width=True,
-    ):
+    if save_col.button("Save", key=f"rename_save_{playlist_id}", icon=":material/save:",
+                        use_container_width=True):
         if new_name.strip() and new_name.strip() != current_name:
             music_service.rename_playlist(playlist_id, new_name.strip())
             st.rerun()
@@ -581,17 +482,13 @@ def _render_playlist_detail(user_id: int, playlist_id: int) -> None:
         return
 
     track_search = st.text_input(
-        "Find track by name",
-        key=f"track_search_{playlist_id}",
-        placeholder="Find a track by name...",
-        icon=":material/search:",
+        "Find track by name", key=f"track_search_{playlist_id}",
+        placeholder="Find a track by name...", icon=":material/search:",
         label_visibility="collapsed",
     )
     display_tracks = tracks
     if track_search.strip():
-        display_tracks = tracks[
-            tracks["title"].str.contains(track_search.strip(), case=False, na=False)
-        ]
+        display_tracks = tracks[tracks["title"].str.contains(track_search.strip(), case=False, na=False)]
 
     if display_tracks.empty:
         st.caption(f'No tracks match "{track_search.strip()}".')
@@ -605,16 +502,13 @@ def _render_playlist_detail(user_id: int, playlist_id: int) -> None:
 # Entry point
 # ---------------------------------------------------------------------------
 
-
 def render() -> None:
     st.markdown("## :material/library_music: Music")
 
     user_id = _current_user_id()
     if not user_id:
-        st.warning(
-            "Log in first (see the Login tab) to build playlists and listen to music.",
-            icon=":material/lock:",
-        )
+        st.warning("Log in first (see the Login tab) to build playlists and listen to music.",
+                    icon=":material/lock:")
         return
 
     view = st.session_state.get("music_view", "list")

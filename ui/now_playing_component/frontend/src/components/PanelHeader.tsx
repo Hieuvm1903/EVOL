@@ -1,5 +1,5 @@
 import React from "react";
-import { Button, Segmented, Tooltip } from "antd";
+import { Button, Segmented, Switch, Tooltip } from "antd";
 import { CloseOutlined, VideoCameraOutlined, FileTextOutlined } from "@ant-design/icons";
 import type { View } from "../types";
 
@@ -11,9 +11,14 @@ interface Props {
   onCollapse: () => void;
   onResetPos: () => void;
   onClose: () => void;
+  snapEnabled: boolean;
+  onToggleSnap: (enabled: boolean) => void;
 }
 
-export default function PanelHeader({ headerRef, view, onViewChange, onStartDrag, onCollapse, onResetPos, onClose }: Props) {
+export default function PanelHeader({
+  headerRef, view, onViewChange, onStartDrag, onCollapse, onResetPos, onClose,
+  snapEnabled, onToggleSnap,
+}: Props) {
   return (
     <div
       className="panel-header"
@@ -24,6 +29,21 @@ export default function PanelHeader({ headerRef, view, onViewChange, onStartDrag
     >
       <span className="drag-grip" onDoubleClick={(e) => { e.stopPropagation(); onResetPos(); }}>⠿</span>
       <span className="panel-title">Now Playing</span>
+
+      <div
+        className="header-snap-toggle"
+        onMouseDown={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+      >
+        <Tooltip title={snapEnabled ? "Snap to edges: on" : "Snap to edges: off"}>
+          <Switch
+            size="small"
+            checked={snapEnabled}
+            onChange={onToggleSnap}
+          />
+        </Tooltip>
+      </div>
+
       <div
         className="header-view-toggle"
         onMouseDown={(e) => e.stopPropagation()}

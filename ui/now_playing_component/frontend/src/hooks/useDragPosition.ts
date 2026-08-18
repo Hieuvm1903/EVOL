@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import { POS_KEY, DRAG_THRESHOLD, PANEL_WIDTH, EDGE_MARGIN } from "../constants";
+import { useEffect, useRef, useState } from "react";
+import { POS_KEY, SNAP_MODE_KEY, DRAG_THRESHOLD, PANEL_WIDTH, EDGE_MARGIN } from "../constants";
 import { getContainer, pointFromEvent, clampToViewport } from "../utils/dom";
 import { DEFAULT_SNAP, nearestSnapId, snapPixelPosition, SnapId } from "../utils/snapPoints";
 
@@ -10,16 +10,29 @@ type DragMeta = {
   cleanup: () => void;
 };
 
-// Handles the floating widget's position: it docks to one of 8 fixed
-// points on drop (see utils/snapPoints.ts) rather than free-floating, and
-// persists which point via POS_KEY (shared parent-window localStorage, so
-// it carries over between pages). Drag tracking itself is unchanged —
-// still a live transform following the cursor in screen coordinates —
-// only the *release* behavior now snaps instead of leaving it wherever
-// the cursor let go.
+function readSnapModePref(): boolean {
+  try {
+    const raw = window.parent.localStorage.getItem(SNAP_MODE_KEY);
+    return raw === null ? true : raw === "1"; // default: snap on
+  } catch {
+    return true;
+  }
+}
+
+// Handles the floating widget's position. Two modes, toggled by the user
+// (see the header switch): "snap" docks to one of 8 fixed points on
+// drop (utils/snapPoints.ts); "free" is the original behavior — drop it
+// anywhere, clamped to the viewport. Both persist under the same POS_KEY,
+// distinguished by shape ({snap: id} vs {leftFrac, topFrac}), so
+// applySavedPosition can restore either. The mode preference itself lives
+// under a separate key so switching modes never discards the saved spot.
 export function useDragPosition() {
   const dragMeta = useRef<DragMeta | null>(null);
   const lastDragMoved = useRef(false);
+
+  const [snapEnabled, setSnapEnabled] = useState<boolean>(readSnapModePref);
+  const snapEnabledRef = useRef(snapEnabled);
+  useEffect(() => { snapEnabledRef.current = snapEnabled; }, [snapEnabled]);
 
   function applyPos(left: number, top: number) {
     const el = getContainer();
@@ -30,9 +43,8 @@ export function useDragPosition() {
     el.style.top = `${top}px`;
   }
 
-  // Briefly enables a CSS transition on left/top so the final hop into a
-  // dock point reads as a "snap", then removes it — every other position
-  // change (drag tracking, resize) stays instant.
+  // Briefly enables a CSS transition on left/top so the hop into a dock
+  // point reads as a "snap" — used only in snap mode.
   function applyPosAnimated(left: number, top: number) {
     const el = getContainer();
     if (!el) return;
@@ -45,27 +57,36 @@ export function useDragPosition() {
     try { window.parent.localStorage.setItem(POS_KEY, JSON.stringify({ snap: id })); } catch { }
   }
 
+  function saveFree(left: number, top: number, vw: number, vh: number) {
+    try { window.parent.localStorage.setItem(POS_KEY, JSON.stringify({ leftFrac: left / vw, topFrac: top / vh })); } catch { }
+  }
+
   function resetPos() {
     const el = getContainer();
     if (el) { el.style.transform = ""; el.style.left = ""; el.style.top = ""; el.style.right = ""; }
     try { window.parent.localStorage.removeItem(POS_KEY); } catch { }
   }
 
-  // Re-derives pixel position for the currently-saved dock point using the
-  // widget's *current* box size — call on mount, on window resize, and
-  // after toggling pill <-> panel (their sizes differ).
+  // Re-derives pixel position from whatever's saved, using the widget's
+  // *current* box size — call on mount, on window resize, and after
+  // toggling pill <-> panel (their sizes differ).
   function applySavedPosition() {
     try {
       const raw = window.parent.localStorage.getItem(POS_KEY);
-      if (!raw) return; // nothing docked yet — leave the CSS default in place
+      if (!raw) return;
       const parsed = JSON.parse(raw);
-      const snapId: SnapId = parsed && typeof parsed.snap === "string" ? parsed.snap : DEFAULT_SNAP;
       const el = getContainer();
       if (!el) return;
       const w = el.offsetWidth || PANEL_WIDTH, h = el.offsetHeight || 60;
       const vw = window.parent.innerWidth, vh = window.parent.innerHeight;
-      const { left, top } = snapPixelPosition(snapId, w, h, vw, vh, EDGE_MARGIN);
-      applyPos(left, top);
+
+      if (parsed && typeof parsed.snap === "string") {
+        const { left, top } = snapPixelPosition(parsed.snap as SnapId, w, h, vw, vh, EDGE_MARGIN);
+        applyPos(left, top);
+      } else if (parsed && typeof parsed.leftFrac === "number") {
+        const { left, top } = clampToViewport(parsed.leftFrac * vw, parsed.topFrac * vh, w, h, vw, vh);
+        applyPos(left, top);
+      }
     } catch { }
   }
 
@@ -83,8 +104,32 @@ export function useDragPosition() {
     }
   }, []);
 
+  // Called from the header switch. In snap mode, immediately docks the
+  // current position to its nearest point rather than waiting for the
+  // next drag. In free mode, just converts the current pixel position to
+  // a fraction and leaves it exactly where it is.
+  function setSnapMode(enabled: boolean) {
+    setSnapEnabled(enabled);
+    try { window.parent.localStorage.setItem(SNAP_MODE_KEY, enabled ? "1" : "0"); } catch { }
+
+    const el = getContainer();
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    let vw = 9999, vh = 9999;
+    try { vw = window.parent.innerWidth; vh = window.parent.innerHeight; } catch { }
+
+    if (enabled) {
+      const id = nearestSnapId(rect.left, rect.top, rect.width, rect.height, vw, vh, EDGE_MARGIN);
+      const { left, top } = snapPixelPosition(id, rect.width, rect.height, vw, vh, EDGE_MARGIN);
+      applyPosAnimated(left, top);
+      saveSnap(id);
+    } else {
+      saveFree(rect.left, rect.top, vw, vh);
+    }
+  }
+
   function startDrag(e: React.MouseEvent | React.TouchEvent, onTap: () => void) {
-    if ((e.target as HTMLElement).closest("button, .header-view-toggle")) return;
+    if ((e.target as HTMLElement).closest("button, .header-view-toggle, .header-snap-toggle")) return;
     const el = getContainer();
     if (!el) return;
 
@@ -134,12 +179,17 @@ export function useDragPosition() {
       try { m.el.classList.remove("evol-dragging"); } catch { }
       try { window.parent.document.body.style.userSelect = ""; } catch { }
       if (m.moved) {
-        m.el.style.transform = ""; // drop the drag-tracking transform; snap uses left/top instead
+        m.el.style.transform = "";
         const rawLeft = m.origLeft + m.dx, rawTop = m.origTop + m.dy;
-        const snapId = nearestSnapId(rawLeft, rawTop, m.w, m.h, m.vw, m.vh, EDGE_MARGIN);
-        const { left, top } = snapPixelPosition(snapId, m.w, m.h, m.vw, m.vh, EDGE_MARGIN);
-        applyPosAnimated(left, top);
-        saveSnap(snapId);
+        if (snapEnabledRef.current) {
+          const snapId = nearestSnapId(rawLeft, rawTop, m.w, m.h, m.vw, m.vh, EDGE_MARGIN);
+          const { left, top } = snapPixelPosition(snapId, m.w, m.h, m.vw, m.vh, EDGE_MARGIN);
+          applyPosAnimated(left, top);
+          saveSnap(snapId);
+        } else {
+          applyPos(rawLeft, rawTop);
+          saveFree(rawLeft, rawTop, m.vw, m.vh);
+        }
       }
       lastDragMoved.current = m.moved;
       dragMeta.current = null;
@@ -171,5 +221,5 @@ export function useDragPosition() {
     return () => { dragMeta.current?.cleanup(); };
   }, []);
 
-  return { startDrag, resetPos, applySavedPosition };
+  return { startDrag, resetPos, applySavedPosition, snapEnabled, setSnapMode };
 }

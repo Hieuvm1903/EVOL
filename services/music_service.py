@@ -258,6 +258,129 @@ def add_track_and_attach(
     return True, f'Added "{title}" to the playlist.', track_id
 
 
+def add_playlist_from_youtube(playlist_id: int, url: str, added_by: int) -> tuple[bool, str, int]:
+    """Bulk-import: read every video listed in a public YouTube playlist
+    link and add each one to `playlist_id`.
+
+    Unlike calling add_track_and_attach() once per video (the original
+    approach — several Sheets API calls *per track*, which for a large
+    playlist was slow enough to hit Sheets' rate limit partway through
+    and silently drop rows), this does the whole import in a handful of
+    calls total: one read of the existing library, one batched insert for
+    every genuinely new track, one read of this playlist's existing
+    tracks, and one batched insert for every new link — regardless of
+    whether the playlist has 5 videos or 200.
+
+    Returns (ok, message, added_count). Fails cleanly with a friendly
+    message if the link doesn't have a `list=` id, the playlist is
+    private/deleted, or nothing could be read from it — never raises.
+    """
+    videos = youtube.fetch_playlist_videos(url)
+    if not videos:
+        return False, (
+            "Couldn't read that playlist — make sure the link is public "
+            "and includes a `list=...` id (e.g. from the playlist's own page, "
+            "not just a single video)."
+        ), 0
+
+    # De-dupe incoming videos by id, preserving order (a real playlist
+    # shouldn't have dupes, but be defensive about the scrape).
+    seen_video_ids: set[str] = set()
+    unique_videos = []
+    for v in videos:
+        vid = v.get("video_id")
+        if vid and vid not in seen_video_ids:
+            seen_video_ids.add(vid)
+            unique_videos.append(v)
+
+    # --- Resolve each video against the existing library (1 read) -------
+    existing_tracks = sheets_db.read_all("tracks")
+    existing_by_video_id: dict[str, int] = {}
+    if not existing_tracks.empty:
+        for _, row in existing_tracks.iterrows():
+            existing_by_video_id[row["video_id"]] = int(row["id"])
+
+    t_now = datetime.now().astimezone(tz=TIMEZONE).strftime("%Y-%m-%d %H:%M:%S %z")
+
+    new_track_rows: list[dict] = []       # rows to insert into "tracks"
+    track_id_for_video: dict[str, int | None] = {}  # video_id -> resolved id (None = pending insert)
+
+    for v in unique_videos:
+        vid = v["video_id"]
+        if vid in existing_by_video_id:
+            track_id_for_video[vid] = existing_by_video_id[vid]
+        else:
+            new_track_rows.append({
+                "title": v.get("title") or "",
+                "artist": "",
+                "video_id": vid,
+                "youtube_url": f"https://www.youtube.com/watch?v={vid}",
+                "thumbnail_url": v.get("thumbnail_url") or "",
+                "lyrics_url": "",
+                "added_by": added_by,
+                "created_at": t_now,
+            })
+            track_id_for_video[vid] = None
+
+    # Titles missing from the scrape (raw video-id fallback in
+    # fetch_playlist_videos) get looked up individually via oEmbed — an
+    # unavoidable per-track HTTP call, but only for tracks that actually
+    # need it, and it's a plain web request, not a Sheets API call.
+    for row in new_track_rows:
+        if not row["title"]:
+            meta = youtube.fetch_metadata(row["youtube_url"])
+            row["title"] = meta.get("title") or "Untitled track"
+            if not row["thumbnail_url"]:
+                row["thumbnail_url"] = meta.get("thumbnail_url", "")
+            if not row["artist"]:
+                row["artist"] = meta.get("author", "")
+
+    # --- Batch-insert every new track in ONE Sheets call -----------------
+    if new_track_rows:
+        inserted = sheets_db.insert_many("tracks", new_track_rows)
+        for r in inserted:
+            track_id_for_video[r["video_id"]] = int(r["id"])
+
+    # --- Attach to the playlist, skipping anything already there --------
+    pt = sheets_db.read_all("playlist_tracks")
+    already_attached: set[int] = set()
+    max_pos = -1
+    if not pt.empty:
+        same_playlist = pt[pt["playlist_id"] == playlist_id]
+        if not same_playlist.empty:
+            max_pos = int(same_playlist["position"].max())
+            already_attached = set(int(x) for x in same_playlist["track_id"].tolist())
+
+    link_rows: list[dict] = []
+    next_pos = max_pos + 1
+    added = 0
+    for v in unique_videos:
+        track_id = track_id_for_video[v["video_id"]]
+        if track_id is None or track_id in already_attached:
+            continue
+        already_attached.add(track_id)  # guard against dup video ids within this same import
+        link_rows.append({
+            "playlist_id": playlist_id,
+            "track_id": track_id,
+            "position": next_pos,
+            "added_at": t_now,
+        })
+        next_pos += 1
+        added += 1
+
+    # --- Batch-insert every new link in ONE Sheets call ------------------
+    if link_rows:
+        sheets_db.insert_many("playlist_tracks", link_rows)
+
+    if added == 0:
+        return False, "Every track in that playlist is already in this playlist.", 0
+
+    note = ""
+    if len(videos) >= 100:
+        note = " (only the first ~100 — longer playlists need paging YouTube doesn't expose without an API key)"
+    return True, f"Added {added} track(s) from the YouTube playlist{note}.", added
+
+
 # ---------------------------------------------------------------------------
 # Export / import (share a playlist between accounts)
 # ---------------------------------------------------------------------------

@@ -35,7 +35,7 @@ export default function NowPlaying({ queue, initialMode }: { queue: Track[]; ini
   const headerRef = useRef<HTMLDivElement>(null);
 
   const engine = usePlayerEngine(queue, initialMode);
-  const { startDrag, resetPos, applySavedPosition } = useDragPosition();
+  const { startDrag, resetPos, applySavedPosition, snapEnabled, setSnapMode } = useDragPosition();
   const lyrics = useLyrics(queue, engine.currentTrackIdx, engine.curTime);
 
   useFrameHeight(rootRef);
@@ -45,7 +45,7 @@ export default function NowPlaying({ queue, initialMode }: { queue: Track[]; ini
   useEffect(() => {
     const id = requestAnimationFrame(() => applySavedPosition());
     return () => cancelAnimationFrame(id);
-  }, [expanded])
+  }, [expanded]);
 
 
   function toggleExpand(v: boolean) {
@@ -98,6 +98,8 @@ export default function NowPlaying({ queue, initialMode }: { queue: Track[]; ini
             onCollapse={() => toggleExpand(false)}
             onResetPos={resetPos}
             onClose={closeWidget}
+            snapEnabled={snapEnabled}
+            onToggleSnap={setSnapMode}
           />
 
           {engine.showUnmute && (

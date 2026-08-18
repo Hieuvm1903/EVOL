@@ -217,3 +217,4 @@ html, body { margin: 0 !important; padding: 0 !important; background: transparen
 .queue-thumb-empty { background: #1c1c1c; }
 .queue-title { flex: 1; font-size: 0.76rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; color: #e6e6e6; }
 .queue-now-badge { color: #02ab21; font-size: 0.68rem; flex-shrink: 0; }
+.header-snap-toggle { display: flex; align-items: center; margin-right: 4px; cursor: default; }
