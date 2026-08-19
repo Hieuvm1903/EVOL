@@ -114,6 +114,9 @@ export function useLyrics(queue: Track[], currentTrackIdx: number, curTime: numb
       track_id: track.id,
       artist_name: selectedCandidate.artistName || null,
       lyrics_url: candidateKey,
+      // Same "tell a fresh action apart from a stale replay" stamp used
+      // by closeWidget() — see now_playing_widget.py.
+      ts: Date.now(),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCandidate]);

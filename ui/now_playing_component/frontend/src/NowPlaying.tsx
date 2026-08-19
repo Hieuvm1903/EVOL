@@ -55,7 +55,7 @@ export default function NowPlaying({ queue, initialMode }: { queue: Track[]; ini
 
   function closeWidget() {
     engine.stopVideo();
-    Streamlit.setComponentValue({ action: "close" });
+    Streamlit.setComponentValue({ action: "close", ts: Date.now() });
   }
 
   function handleSeekFromLyrics(time: number) {
