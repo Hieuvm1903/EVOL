@@ -7,6 +7,7 @@ from ui.now_playing_widget import load_queue as _load_queue
 from utils import ytmusic_search
 
 _SORT_OPTIONS = ["Newest first", "Oldest first", "Name (A-Z)", "Name (Z-A)"]
+_TRACK_SORT_OPTIONS = ["Playlist order", "Title (A-Z)", "Title (Z-A)", "Artist (A-Z)", "Newest added"]
 
 
 def _current_user_id():
@@ -24,6 +25,20 @@ def _sort_playlists(df, sort_choice: str):
     if sort_choice == "Oldest first":
         return df.sort_values("created_at", ascending=True)
     return df.sort_values("created_at", ascending=False)  # Newest first
+
+
+def _sort_tracks(df, sort_choice: str):
+    if df.empty or sort_choice == "Playlist order":
+        return df
+    if sort_choice == "Title (A-Z)":
+        return df.sort_values("title", key=lambda s: s.str.lower())
+    if sort_choice == "Title (Z-A)":
+        return df.sort_values("title", key=lambda s: s.str.lower(), ascending=False)
+    if sort_choice == "Artist (A-Z)":
+        return df.sort_values("artist", key=lambda s: s.fillna("").str.lower())
+    if sort_choice == "Newest added":
+        return df.sort_values("position", ascending=False)
+    return df
 
 
 # ---------------------------------------------------------------------------
@@ -166,8 +181,23 @@ def _render_playlist_list(user_id: int) -> None:
 # Playlist detail view
 # ---------------------------------------------------------------------------
 
-def _render_play_controls(tracks, key_prefix: str) -> None:
-    c1, c2, c3 = st.columns(3, gap="small")
+@st.dialog("Add track", width="large")
+def _add_track_dialog(playlist_id: int, user_id: int, existing_ids: set) -> None:
+    _render_add_track(playlist_id, user_id, existing_ids)
+
+
+@st.dialog("Export playlist")
+def _export_dialog(playlist_id: int, key_suffix: str) -> None:
+    _render_export_controls(playlist_id, key_suffix=key_suffix, code_height=240)
+
+
+def _render_control_row(playlist_id: int, user_id: int, tracks, existing_ids: set, key_prefix: str) -> None:
+    """Play / Shuffle / Repeat all / Add track / Export — all in one row.
+    Add track and Export open as modal dialogs (real width, not a cramped
+    floating panel) rather than pushing the track list down the page the
+    way full-width expanders used to."""
+    c1, c2, c3, c4, c5 = st.columns(5, gap="small")
+
     if c1.button("Play", key=f"{key_prefix}_play", icon=":material/play_arrow:", use_container_width=True):
         if tracks.empty:
             st.warning("This playlist is empty.")
@@ -186,6 +216,12 @@ def _render_play_controls(tracks, key_prefix: str) -> None:
         else:
             _load_queue(tracks, "Repeat All")
             st.rerun()
+
+    if c4.button("Add track", key=f"{key_prefix}_addtrack", icon=":material/add:", use_container_width=True):
+        _add_track_dialog(playlist_id, user_id, existing_ids)
+
+    if c5.button("Export", key=f"{key_prefix}_exportbtn", icon=":material/ios_share:", use_container_width=True):
+        _export_dialog(playlist_id, key_suffix=key_prefix)
 
 
 def _play_track_from_here(tracks_df, track_id: int) -> None:
@@ -298,129 +334,128 @@ def _render_track_row(playlist_id: int, tracks_df, t) -> None:
 
 
 def _render_add_track(playlist_id: int, user_id: int, existing_ids: set) -> None:
-    with st.expander("Add track", icon=":material/add:", expanded=False):
-        tab_search, tab_link, tab_playlist = st.tabs([
-            ":material/search: Search",
-            ":material/link: Paste link",
-            ":material/queue_music: YT playlist",
-        ])
+    tab_search, tab_link, tab_playlist = st.tabs([
+        ":material/search: Search",
+        ":material/link: Paste link",
+        ":material/queue_music: YT playlist",
+    ])
 
-        with tab_search:
-            with st.form(key=f"search_form_{playlist_id}"):
-                sc1, sc2 = st.columns([3, 1], vertical_alignment="bottom")
-                query = sc1.text_input("Search songs", key=f"search_q_{playlist_id}",
-                                        placeholder="song title or artist...", icon=":material/search:")
-                search_clicked = sc2.form_submit_button("Search", icon=":material/search:",
-                                                         use_container_width=True)
-            if search_clicked and query.strip():
-                with st.spinner("Searching..."):
-                    st.session_state[f"search_results_{playlist_id}"] = ytmusic_search.search_songs(query.strip())
+    with tab_search:
+        with st.form(key=f"search_form_{playlist_id}"):
+            sc1, sc2 = st.columns([3, 1], vertical_alignment="bottom")
+            query = sc1.text_input("Search songs", key=f"search_q_{playlist_id}",
+                                    placeholder="song title or artist...", icon=":material/search:")
+            search_clicked = sc2.form_submit_button("Search", icon=":material/search:",
+                                                     use_container_width=True)
+        if search_clicked and query.strip():
+            with st.spinner("Searching..."):
+                st.session_state[f"search_results_{playlist_id}"] = ytmusic_search.search_songs(query.strip())
 
-            results = st.session_state.get(f"search_results_{playlist_id}", [])
-            for r in results:
-                rc1, rc2, rc3 = st.columns([1, 4, 1], vertical_alignment="center", gap="small")
-                if r["thumbnail_url"]:
-                    rc1.image(r["thumbnail_url"], width=56)
-                rc2.markdown(f"**{r['title']}**  \n{r['artist']} · {r['duration']}")
-                if rc3.button("", key=f"searchadd_{playlist_id}_{r['video_id']}", icon=":material/add:"):
-                    url = f"https://www.youtube.com/watch?v={r['video_id']}"
-                    ok, msg, _ = music_service.add_track_and_attach(
-                        playlist_id, url, user_id,
-                        known_title=r["title"], known_thumbnail=r["thumbnail_url"],
-                        known_artist=r["artist"],
+        results = st.session_state.get(f"search_results_{playlist_id}", [])
+        for r in results:
+            rc1, rc2, rc3 = st.columns([1, 4, 1], vertical_alignment="center", gap="small")
+            if r["thumbnail_url"]:
+                rc1.image(r["thumbnail_url"], width=56)
+            rc2.markdown(f"**{r['title']}**  \n{r['artist']} · {r['duration']}")
+            if rc3.button("", key=f"searchadd_{playlist_id}_{r['video_id']}", icon=":material/add:"):
+                url = f"https://www.youtube.com/watch?v={r['video_id']}"
+                ok, msg, _ = music_service.add_track_and_attach(
+                    playlist_id, url, user_id,
+                    known_title=r["title"], known_thumbnail=r["thumbnail_url"],
+                    known_artist=r["artist"],
+                )
+                (st.success if ok else st.error)(msg)
+                if ok:
+                    st.rerun()
+
+    with tab_link:
+        url = st.text_input("YouTube link", key=f"add_url_{playlist_id}",
+                             placeholder="https://www.youtube.com/watch?v=...", icon=":material/link:")
+        tc1, tc2 = st.columns([3, 1], vertical_alignment="bottom")
+        title_override = tc1.text_input("Title (optional)", key=f"add_title_{playlist_id}")
+        if tc2.button("Fetch & add", key=f"add_btn_{playlist_id}", icon=":material/add:",
+                      use_container_width=True):
+            if not url.strip():
+                st.warning("Paste a YouTube link first.")
+            else:
+                ok, msg, _ = music_service.add_track_and_attach(
+                    playlist_id, url.strip(), user_id, known_title=title_override.strip() or None,
+                )
+                (st.success if ok else st.error)(msg)
+                if ok:
+                    st.rerun()
+
+    with tab_playlist:
+        st.caption("Search for a playlist, or paste a playlist link directly, to add every track in it at once.")
+
+        with st.form(key=f"playlist_search_form_{playlist_id}"):
+            psc1, psc2 = st.columns([3, 1], vertical_alignment="bottom")
+            playlist_query = psc1.text_input(
+                "Search playlists", key=f"playlist_q_{playlist_id}",
+                placeholder="playlist name...", icon=":material/search:",
+            )
+            playlist_search_clicked = psc2.form_submit_button(
+                "Search", icon=":material/search:", use_container_width=True,
+            )
+        if playlist_search_clicked and playlist_query.strip():
+            with st.spinner("Searching..."):
+                st.session_state[f"playlist_results_{playlist_id}"] = \
+                    ytmusic_search.search_playlists(playlist_query.strip())
+
+        playlist_results = st.session_state.get(f"playlist_results_{playlist_id}", [])
+        for pr in playlist_results:
+            prc1, prc2, prc3 = st.columns([1, 4, 1], vertical_alignment="center", gap="small")
+            if pr["thumbnail_url"]:
+                prc1.image(pr["thumbnail_url"], width=56)
+            count_label = f" · {pr['item_count']} tracks" if pr["item_count"] else ""
+            prc2.markdown(f"**{pr['title']}**  \n{pr['author']}{count_label}")
+            if prc3.button("", key=f"playlistadd_{playlist_id}_{pr['playlist_id']}",
+                           icon=":material/playlist_add:", help="Import this playlist",
+                           use_container_width=True):
+                with st.spinner("Adding tracks..."):
+                    ok, msg, _added = music_service.add_playlist_from_youtube(
+                        playlist_id,
+                        f"https://www.youtube.com/playlist?list={pr['playlist_id']}",
+                        user_id,
                     )
-                    (st.success if ok else st.error)(msg)
-                    if ok:
-                        st.rerun()
+                (st.success if ok else st.error)(msg)
+                if ok:
+                    st.rerun()
+        if playlist_search_clicked and playlist_query.strip() and not playlist_results:
+            st.caption(f'No importable playlists found for "{playlist_query.strip()}".')
 
-        with tab_link:
-            url = st.text_input("YouTube link", key=f"add_url_{playlist_id}",
-                                 placeholder="https://www.youtube.com/watch?v=...", icon=":material/link:")
-            tc1, tc2 = st.columns([3, 1], vertical_alignment="bottom")
-            title_override = tc1.text_input("Title (optional)", key=f"add_title_{playlist_id}")
-            if tc2.button("Fetch & add", key=f"add_btn_{playlist_id}", icon=":material/add:",
-                          use_container_width=True):
-                if not url.strip():
-                    st.warning("Paste a YouTube link first.")
-                else:
-                    ok, msg, _ = music_service.add_track_and_attach(
-                        playlist_id, url.strip(), user_id, known_title=title_override.strip() or None,
+        st.caption("Or paste a playlist link directly")
+        with st.form(key=f"add_playlist_form_{playlist_id}"):
+            yc1, yc2 = st.columns([3, 1], vertical_alignment="bottom")
+            playlist_url = yc1.text_input(
+                "YouTube playlist link", key=f"add_playlist_url_{playlist_id}",
+                placeholder="https://www.youtube.com/playlist?list=...", icon=":material/link:",
+            )
+            import_clicked = yc2.form_submit_button(
+                "Add all", icon=":material/playlist_add:", use_container_width=True,
+            )
+        if import_clicked:
+            if not playlist_url.strip():
+                st.warning("Paste a YouTube playlist link first.")
+            else:
+                with st.spinner("Reading playlist..."):
+                    ok, msg, _added = music_service.add_playlist_from_youtube(
+                        playlist_id, playlist_url.strip(), user_id,
                     )
-                    (st.success if ok else st.error)(msg)
-                    if ok:
-                        st.rerun()
+                (st.success if ok else st.error)(msg)
+                if ok:
+                    st.rerun()
 
-        with tab_playlist:
-            st.caption("Search for a playlist, or paste a playlist link directly, to add every track in it at once.")
-
-            with st.form(key=f"playlist_search_form_{playlist_id}"):
-                psc1, psc2 = st.columns([3, 1], vertical_alignment="bottom")
-                playlist_query = psc1.text_input(
-                    "Search playlists", key=f"playlist_q_{playlist_id}",
-                    placeholder="playlist name...", icon=":material/search:",
-                )
-                playlist_search_clicked = psc2.form_submit_button(
-                    "Search", icon=":material/search:", use_container_width=True,
-                )
-            if playlist_search_clicked and playlist_query.strip():
-                with st.spinner("Searching..."):
-                    st.session_state[f"playlist_results_{playlist_id}"] = \
-                        ytmusic_search.search_playlists(playlist_query.strip())
-
-            playlist_results = st.session_state.get(f"playlist_results_{playlist_id}", [])
-            for pr in playlist_results:
-                prc1, prc2, prc3 = st.columns([1, 4, 1], vertical_alignment="center", gap="small")
-                if pr["thumbnail_url"]:
-                    prc1.image(pr["thumbnail_url"], width=56)
-                count_label = f" · {pr['item_count']} tracks" if pr["item_count"] else ""
-                prc2.markdown(f"**{pr['title']}**  \n{pr['author']}{count_label}")
-                if prc3.button("", key=f"playlistadd_{playlist_id}_{pr['playlist_id']}",
-                               icon=":material/playlist_add:", help="Import this playlist",
-                               use_container_width=True):
-                    with st.spinner("Adding tracks..."):
-                        ok, msg, _added = music_service.add_playlist_from_youtube(
-                            playlist_id,
-                            f"https://www.youtube.com/playlist?list={pr['playlist_id']}",
-                            user_id,
-                        )
-                    (st.success if ok else st.error)(msg)
-                    if ok:
-                        st.rerun()
-            if playlist_search_clicked and playlist_query.strip() and not playlist_results:
-                st.caption(f'No importable playlists found for "{playlist_query.strip()}".')
-
-            st.caption("Or paste a playlist link directly")
-            with st.form(key=f"add_playlist_form_{playlist_id}"):
-                yc1, yc2 = st.columns([3, 1], vertical_alignment="bottom")
-                playlist_url = yc1.text_input(
-                    "YouTube playlist link", key=f"add_playlist_url_{playlist_id}",
-                    placeholder="https://www.youtube.com/playlist?list=...", icon=":material/link:",
-                )
-                import_clicked = yc2.form_submit_button(
-                    "Add all", icon=":material/playlist_add:", use_container_width=True,
-                )
-            if import_clicked:
-                if not playlist_url.strip():
-                    st.warning("Paste a YouTube playlist link first.")
-                else:
-                    with st.spinner("Reading playlist..."):
-                        ok, msg, _added = music_service.add_playlist_from_youtube(
-                            playlist_id, playlist_url.strip(), user_id,
-                        )
-                    (st.success if ok else st.error)(msg)
-                    if ok:
-                        st.rerun()
-
-        library = music_service.get_all_tracks()
-        addable = library[~library["id"].isin(existing_ids)] if not library.empty else library
-        if addable is not None and not addable.empty:
-            opts = {r["title"]: r["id"] for _, r in addable.iterrows()}
-            pc1, pc2 = st.columns([3, 1], vertical_alignment="bottom")
-            pick = pc1.selectbox("Or add from your library", ["—"] + list(opts.keys()), key=f"pick_{playlist_id}")
-            if pick != "—" and pc2.button("Add selected", key=f"add_lib_{playlist_id}",
-                                           icon=":material/add:", use_container_width=True):
-                music_service.add_track_to_playlist(playlist_id, opts[pick])
-                st.rerun()
+    library = music_service.get_all_tracks()
+    addable = library[~library["id"].isin(existing_ids)] if not library.empty else library
+    if addable is not None and not addable.empty:
+        opts = {r["title"]: r["id"] for _, r in addable.iterrows()}
+        pc1, pc2 = st.columns([3, 1], vertical_alignment="bottom")
+        pick = pc1.selectbox("Or add from your library", ["—"] + list(opts.keys()), key=f"pick_{playlist_id}")
+        if pick != "—" and pc2.button("Add selected", key=f"add_lib_{playlist_id}",
+                                       icon=":material/add:", use_container_width=True):
+            music_service.add_track_to_playlist(playlist_id, opts[pick])
+            st.rerun()
 
 
 def _render_export_controls(playlist_id: int, key_suffix: str, code_height: int | None = None) -> None:
@@ -435,8 +470,7 @@ def _render_export_controls(playlist_id: int, key_suffix: str, code_height: int 
             "", data=content,
             file_name=f"playlist.{'json' if fmt == 'JSON' else 'txt'}",
             mime="application/json" if fmt == "JSON" else "text/plain",
-            icon=":material/download:", key=f"export_dl_{key_suffix}",
-            use_container_width=True,
+            icon=":material/download:", key=f"export_dl_{key_suffix}"
         )
     st.code(content, language=("json" if fmt == "JSON" else None), wrap_lines=True, height=code_height)
 
@@ -468,27 +502,29 @@ def _render_playlist_detail(user_id: int, playlist_id: int) -> None:
     tracks = music_service.get_playlist_tracks(playlist_id)
     existing_ids = set(tracks["id"]) if not tracks.empty else set()
 
-    _render_play_controls(tracks, key_prefix=f"detail_{playlist_id}")
-
-    add_col, export_col = st.columns(2, gap="small")
-    with add_col:
-        _render_add_track(playlist_id, user_id, existing_ids)
-    with export_col:
-        with st.expander("Export / share", icon=":material/ios_share:", expanded=False):
-            _render_export_controls(playlist_id, key_suffix=f"detail_{playlist_id}")
+    _render_control_row(playlist_id, user_id, tracks, existing_ids, key_prefix=f"detail_{playlist_id}")
 
     if tracks.empty:
         st.caption("No tracks yet — add some above.")
         return
 
-    track_search = st.text_input(
+    sc1, sc2 = st.columns([3, 1], gap="small")
+    track_search = sc1.text_input(
         "Find track by name", key=f"track_search_{playlist_id}",
         placeholder="Find a track by name...", icon=":material/search:",
         label_visibility="collapsed",
     )
+    track_sort = sc2.selectbox(
+        "Sort", _TRACK_SORT_OPTIONS, key=f"track_sort_{playlist_id}", label_visibility="collapsed",
+    )
+
     display_tracks = tracks
     if track_search.strip():
-        display_tracks = tracks[tracks["title"].str.contains(track_search.strip(), case=False, na=False)]
+        display_tracks = display_tracks[
+            display_tracks["title"].str.contains(track_search.strip(), case=False, na=False)
+            | display_tracks["artist"].fillna("").str.contains(track_search.strip(), case=False, na=False)
+        ]
+    display_tracks = _sort_tracks(display_tracks, track_sort)
 
     if display_tracks.empty:
         st.caption(f'No tracks match "{track_search.strip()}".')
