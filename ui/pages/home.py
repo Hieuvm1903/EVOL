@@ -1,3 +1,4 @@
+import time
 import urllib.parse
 
 import streamlit as st
@@ -7,35 +8,45 @@ FB_POST_URL = (
     "https://www.facebook.com/photo/?fbid=1423943031364508"
     "&set=a.167615383663952"
 )
-
-# These three describe the FULL, correctly-proportioned embed — the size
-# at which the crop (no avatar/header, no like/comment/share bar) actually
-# lines up. Don't shrink these to make the card smaller; use DISPLAY_SCALE
-# instead, or the crop offset will drift again (see below).
 FB_EMBED_WIDTH = 750
 FB_EMBED_HEIGHT = 900
 FB_VISIBLE_HEIGHT = 400
-
-# Visual size knob — scales the whole embed down (image included) via CSS
-# transform, so the crop stays exactly correct at any size. 0.65 -> ~488px
-# wide card. Raise/lower this to make the card bigger/smaller.
 DISPLAY_SCALE = 0.65
+
+_QUOTE_LINES = [
+    "Từng đau khổ mới biết thế nào là đau khổ.",
+    "Từng chấp trước mới có thể rũ bỏ được chấp trước.",
+    "**Từng vấn vương mới có thể không còn vấn vương!**",
+]
+_QUOTE_TEXT = "  \n".join(_QUOTE_LINES)
+_WORD_DELAY = 0.045
+
+
+def _quote_stream():
+    for i, line in enumerate(_QUOTE_LINES):
+        words = line.split(" ")
+        for j, word in enumerate(words):
+            yield word + (" " if j < len(words) - 1 else "")
+            time.sleep(_WORD_DELAY)
+        if i < len(_QUOTE_LINES) - 1:
+            yield "  \n"
 
 
 def _render_hero() -> None:
     st.markdown(
-        """
-        <div class="evol-hero">
-            <div class="evol-hero-title">EVOL&nbsp;Space</div>
-            <div class="evol-hero-quote">
-                <p>Từng đau khổ mới biết thế nào là đau khổ.</p>
-                <p>Từng chấp trước mới có thể rũ bỏ được chấp trước.</p>
-                <p>Từng vấn vương mới có thể không còn vấn vương!</p>
-            </div>
-        </div>
-        """,
+        '<div class="evol-hero-title">EVOL&nbsp;Space</div>',
         unsafe_allow_html=True,
     )
+
+
+    st.markdown('<div class="evol-quote-card">', unsafe_allow_html=True)
+    st.markdown('<div class="evol-quote-mark evol-quote-mark-open">“</div>', unsafe_allow_html=True)
+
+    with st.container(key="evol_hero_quote_typing"):
+        st.write_stream(_quote_stream())
+
+    st.markdown('<div class="evol-quote-mark evol-quote-mark-close">”</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 def _render_facebook_embed() -> None:
@@ -45,15 +56,9 @@ def _render_facebook_embed() -> None:
         f"?href={href}&width={FB_EMBED_WIDTH}&show_text=false"
         f"&height={FB_EMBED_HEIGHT}&appId"
     )
-
     display_width = FB_EMBED_WIDTH * DISPLAY_SCALE-10
     display_height = FB_VISIBLE_HEIGHT * DISPLAY_SCALE
 
-    # Outer box is sized at the SCALED (small) dimensions and clips
-    # anything outside it. Inner box is sized at the FULL (real) FB
-    # dimensions and then shrunk visually with transform:scale — the crop
-    # offset that already worked at full size stays correct, it's just
-    # rendered smaller.
     html = f"""
     <div style="display:flex; justify-content:center;">
       <div style="

@@ -147,7 +147,8 @@ h1, h2, h3 {
 }
 .evol-hero-title {
     font-family: 'Be Vietnam Pro', sans-serif;
-    font-size: 3.2rem;
+    text-align: center;
+    font-size: clamp(2.2rem, 5vw, 3.2rem);
     font-weight: 700;
     letter-spacing: 0.02em;
     background: linear-gradient(90deg, #02ab21, #3ddc57 45%, #02ab21);
@@ -156,25 +157,70 @@ h1, h2, h3 {
     background-clip: text;
     color: transparent;
     animation: evol-shine 6s linear infinite;
-    margin-bottom: 18px;
+    padding-top: 24px;
+    margin-bottom: 8px;
 }
 @keyframes evol-shine {
     to { background-position: 200% center; }
 }
-.evol-hero-quote p {
+
+/* Quote card */
+.evol-quote-card {
+    position: relative;
+    max-width: 680px;
+    margin: 0 auto 32px;
+    padding: 8px 48px 28px;
+    text-align: center;
+    animation: evol-fade-up 0.6s ease both;
+}
+@keyframes evol-fade-up {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.evol-quote-mark {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 3.2rem;
+    line-height: 1;
+    color: #02ab21;
+    opacity: 0.35;
+    user-select: none;
+}
+.evol-quote-mark-open  { text-align: left; margin: 0 0 -8px 4px; }
+.evol-quote-mark-close { text-align: right; margin: -14px 4px 0 0; }
+
+.st-key-evol_hero_quote_typing,
+.st-key-evol_hero_quote_static {
+    text-align: center !important;
+}
+.st-key-evol_hero_quote_typing p,
+.st-key-evol_hero_quote_static p {
     font-family: 'Be Vietnam Pro', sans-serif;
     font-style: italic;
     font-weight: 400;
-    font-size: 1.45rem;
+    font-size: clamp(1.1rem, 2.4vw, 1.45rem);
     line-height: 1.9;
     color: #d8d8d8;
-    margin: 0 0 6px;
     letter-spacing: 0.01em;
+    margin: 0;
+    text-align: center !important;
 }
-.evol-hero-quote p:last-child {
+.st-key-evol_hero_quote_typing strong,
+.st-key-evol_hero_quote_static strong {
     color: #02ab21;
     font-weight: 600;
     font-style: normal;
+}
+
+/* Blinking cursor only while actively typing — static (already-seen)
+   render has no cursor, so revisiting Home doesn't replay the animation. */
+.st-key-evol_hero_quote_typing [data-testid="stMarkdownContainer"] p:last-child::after {
+    content: "▍";
+    color: #02ab21;
+    animation: evol-cursor-blink 0.9s steps(1) infinite;
+}
+@keyframes evol-cursor-blink {
+    50% { opacity: 0; }
 }
 
 /* Facebook embed — cropped to just the photo, no like/comment/share bar
