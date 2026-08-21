@@ -51,9 +51,15 @@ PLACE_ICON_CHOICES = {
 }
 
 # Photobooth filters (must match keys handled in utils.image_filters.apply_filter)
-# Photobooth filters (must match keys handled in utils.image_filters.apply_filter)
 PHOTO_FILTERS = [
-    "None", "Grayscale", "Sepia", "Invert", "Blur", "Vintage",
-    "Brightness+", "Contrast+", "Sharpen", "Warm", "Cool",
-    "Posterize", "Solarize", "Edge Enhance", "B&W (High Contrast)",
+    "None", "Grayscale", "Sepia", "Invert", "Vintage",
+    "Posterize", "Solarize", "B&W (High Contrast)",
 ]
+FRAMES_DIR = os.path.join(ROOT_DIR, "assets", "frames")
+PHOTO_FRAMES = {
+    "None": None,
+    "Birthday": "birthday.png",
+    "Polaroid": "polaroid.png",
+    "Hearts": "hearts.png",
+    "Christmas": "christmas.png",
+}

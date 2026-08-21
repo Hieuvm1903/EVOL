@@ -23,21 +23,22 @@ def _render_login_form() -> None:
 def _render_signup_form() -> None:
     with st.form("signup_form"):
         username = st.text_input("Choose a username", key="signup_username")
+        name = st.text_input("Your name", key="signup_name")
         password = st.text_input("Choose a password", type="password", key="signup_password")
         submitted = st.form_submit_button("Create account", icon=":material/person_add:")
-                                           
 
     if submitted:
-        ok, message = auth_service.register_user(username, password)
+        ok, message = auth_service.register_user(username, password, name=name)
         (st.success if ok else st.error)(message)
-
 
 def render() -> None:
     st.markdown("## :material/login: Login")
 
     user = st.session_state.get("user")
     if user:
-        st.success(f"You're logged in as **{user['username']}**.", icon=":material/check_circle:")
+        display_name = user.get("name") or user["username"]
+        st.success(f"You're logged in as **{display_name}** ({user.get('role', 'member')}).",
+                    icon=":material/check_circle:")
         st.caption("You'll stay logged in even if you reload the page, for 30 days.")
         st.caption("Head to the Music tab to build playlists.")
         if st.button("Log out", icon=":material/logout:"):

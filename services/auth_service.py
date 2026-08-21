@@ -41,7 +41,10 @@ def _verify_password(password: str, stored: str) -> bool:
     return expected == digest_hex
 
 
-def register_user(username: str, password: str) -> tuple[bool, str]:
+DEFAULT_ROLE = "member"
+
+
+def register_user(username: str, password: str, name: str = "", role: str = DEFAULT_ROLE) -> tuple[bool, str]:
     username = username.strip()
     if not username or not password:
         return False, "Username and password are required."
@@ -56,9 +59,20 @@ def register_user(username: str, password: str) -> tuple[bool, str]:
     sheets_db.insert("users", {
         "username": username,
         "password_hash": _hash_password(password),
+        "name": name.strip(),
+        "role": role,
         "created_at": t,
     })
     return True, "Account created — you can log in now."
+
+
+def _user_dict(row) -> dict:
+    return {
+        "id": int(row["id"]),
+        "username": row["username"],
+        "name": row.get("name") or "",
+        "role": row.get("role") or DEFAULT_ROLE,
+    }
 
 
 def verify_user(username: str, password: str) -> dict | None:
@@ -70,7 +84,7 @@ def verify_user(username: str, password: str) -> dict | None:
         return None
     row = match.iloc[0]
     if _verify_password(password, row["password_hash"]):
-        return {"id": int(row["id"]), "username": row["username"]}
+        return _user_dict(row)
     return None
 
 
@@ -79,9 +93,18 @@ def verify_user(username: str, password: str) -> dict | None:
 # ---------------------------------------------------------------------------
 
 def _cookie_controller() -> CookieController:
-    # Constructed fresh each run (cheap) — its `key` is what gives it a
-    # stable identity across reruns on the frontend side, not caching here.
-    return CookieController(key="evol_cookies")
+    # IMPORTANT: must be the SAME Python instance for the whole session,
+    # not a fresh one per call. A brand-new CookieController hasn't
+    # round-tripped to the browser yet, so its internal cookie store is
+    # still None right after construction — calling .set()/.remove() on
+    # it then raises "TypeError: 'NoneType' object does not support item
+    # assignment". Caching one instance in session_state lets it sync
+    # once (e.g. during restore_session() on initial page load) and stay
+    # synced across reruns, instead of resetting to "not synced" on
+    # every single call.
+    if "_cookie_controller" not in st.session_state:
+        st.session_state["_cookie_controller"] = CookieController(key="evol_cookies")
+    return st.session_state["_cookie_controller"]
 
 
 def _now() -> datetime:
@@ -123,8 +146,7 @@ def _get_user_by_session(token: str) -> dict | None:
     user_match = users[users["id"] == int(row["user_id"])] if not users.empty else users
     if user_match is None or user_match.empty:
         return None
-    user_row = user_match.iloc[0]
-    return {"id": int(user_row["id"]), "username": user_row["username"]}
+    return _user_dict(user_match.iloc[0])
 
 
 def delete_session(token: str) -> None:
@@ -134,7 +156,17 @@ def delete_session(token: str) -> None:
 def remember_login(user: dict) -> None:
     """Call right after a successful login/signup to persist it across reloads."""
     token = create_session(user["id"])
-    _cookie_controller().set(COOKIE_NAME, token, max_age=SESSION_LIFETIME_DAYS * 24 * 3600)
+    controller = _cookie_controller()
+    if controller.getAll() is None:
+        # Cookie component hasn't finished its first browser round-trip
+        # in this session yet. The user is already logged in for this
+        # run (st.session_state["user"] was set by the caller before
+        # remember_login was called) — just skip persisting the
+        # "remember me" cookie this once rather than crashing; it'll be
+        # set correctly next time they log in (by then the controller,
+        # which is now cached, will be synced).
+        return
+    controller.set(COOKIE_NAME, token, max_age=SESSION_LIFETIME_DAYS * 24 * 3600)
 
 
 def forget_login() -> None:

@@ -6,9 +6,10 @@ import pandas as pd
 import streamlit as st
 from PIL import Image
 
-from config import PHOTO_FILTERS, TIMEZONE
+from config import PHOTO_FILTERS, PHOTO_FRAMES, TIMEZONE
 from services import photos_service
-from utils.image_filters import apply_filter
+from utils.image_filters import apply_filter, apply_adjustments, DEFAULT_ADJUSTMENTS
+from utils.photo_frames import apply_frame
 
 # streamlit-webrtc + av power both Timer and Gesture mode. These pull in
 # compiled extensions that can be finicky on some local Windows setups, so
@@ -29,229 +30,288 @@ try:
 except ImportError:
     GESTURE_CAPTURE_AVAILABLE = False
 
-# Crop + before/after compare are both optional extras — page still works
-# (just without those two widgets) if either package isn't installed.
+# --- streamlit_extras: three separate optional widgets, each guarded on
+# its own so a missing one just degrades that one feature, not the page. ---
 try:
-    from streamlit_cropper import st_cropper
-    CROPPER_AVAILABLE = True
+    from streamlit_extras.card_selector import card_selector
+    CARD_SELECTOR_AVAILABLE = True
 except ImportError:
-    CROPPER_AVAILABLE = False
+    CARD_SELECTOR_AVAILABLE = False
 
 try:
-    from streamlit_image_comparison import image_comparison
+    from streamlit_extras.image_crop import image_crop
+    CROP_AVAILABLE = True
+except ImportError:
+    CROP_AVAILABLE = False
+
+try:
+    from streamlit_extras.image_compare_slider import image_compare_slider
     COMPARISON_AVAILABLE = True
 except ImportError:
     COMPARISON_AVAILABLE = False
 
 TIMER_OPTIONS = [3, 5, 10]  # seconds
+THUMB_WIDTH = 64
 
 POSE_OPTIONS = {
     "🖐️ Open palm": "open_palm",
     "✌️ Peace sign": "peace",
     "👍 Thumbs up": "thumbs_up",
     "✊ Fist": "fist",
-    "🤖 Any recognized pose": "any",
+    "🤖 Any pose": "any",
 }
 POSE_LABELS = {v: k for k, v in POSE_OPTIONS.items()}
 
 
-def _set_raw_image(img: Image.Image) -> None:
-    """Every capture path (click/timer/gesture/upload) funnels through
-    here. Bumping the version counter forces a brand-new st_cropper
-    widget instance below (its key includes the version) — without this,
-    a fresh photo would still show the *previous* photo's crop box/region
-    until manually reset, since st_cropper otherwise keeps its own state
-    keyed only by widget key."""
-    st.session_state["photobooth_raw_image"] = img.convert("RGB")
-    st.session_state["photobooth_image_version"] = st.session_state.get("photobooth_image_version", 0) + 1
+# ---------------------------------------------------------------------------
+# Shot list — every capture (click/timer/gesture/upload) appends here.
+# ---------------------------------------------------------------------------
+
+def _add_shot(img: Image.Image) -> None:
+    shots = st.session_state.setdefault("photobooth_shots", [])
+    shots.append(img.convert("RGB"))
+    st.session_state["photobooth_active_idx"] = len(shots) - 1
+    st.session_state["photobooth_adjustments"] = dict(DEFAULT_ADJUSTMENTS)
+    st.session_state.pop("photobooth_cropped", None)  # new shot -> discard any old crop
 
 
-def _render_click_capture() -> None:
-    camera_photo = st.camera_input("Take a photo")
-    if camera_photo is not None:
-        _set_raw_image(Image.open(camera_photo))
+def _active_shot() -> Image.Image | None:
+    shots = st.session_state.get("photobooth_shots", [])
+    idx = st.session_state.get("photobooth_active_idx")
+    if idx is None or idx >= len(shots):
+        return None
+    return shots[idx]
 
 
-def _render_upload_capture() -> None:
-    st.caption("🧪 Temporary: upload any image to test crop/filters/compare without a camera.")
-    uploaded = st.file_uploader("Upload an image", type=["png", "jpg", "jpeg", "webp"], key="photobooth_upload")
-    if uploaded is not None:
-        # Only re-set (and bump the crop version) when it's actually a new
-        # upload, not on every rerun the uploader widget survives.
-        upload_sig = (uploaded.name, uploaded.size)
-        if st.session_state.get("photobooth_upload_sig") != upload_sig:
-            st.session_state["photobooth_upload_sig"] = upload_sig
-            _set_raw_image(Image.open(uploaded))
+def _render_shot_picker() -> None:
+    """Small thumbnails to pick which captured shot is being edited.
+    Uses streamlit_extras.card_selector when available (a scrollable row
+    of image cards, returns the selected index); falls back to a plain
+    button-per-row list otherwise."""
+    shots = st.session_state.get("photobooth_shots", [])
+    if not shots:
+        return
+    st.caption(f"Shots ({len(shots)}) — tap to edit")
 
-
-def _render_timer_capture() -> None:
-    st.caption("⏱️ Live preview below — pick a countdown, hit start, strike your pose!")
-    ctx = webrtc_streamer(
-        key="timer-photobooth",
-        video_processor_factory=TimerCaptureProcessor,
-        rtc_configuration=TIMER_RTC_CONFIGURATION,
-        media_stream_constraints={"video": True, "audio": False},
-    )
-
-    seconds = st.select_slider("Countdown (seconds)", options=TIMER_OPTIONS, value=3, key="timer_seconds")
-
-    if not ctx.video_processor:
-        st.caption("Waiting for the camera to connect…")
+    if CARD_SELECTOR_AVAILABLE:
+        items = [{"image": shot, "title": f"Shot {i + 1}"} for i, shot in enumerate(shots)]
+        selected_idx = card_selector(
+            items,
+            key="photobooth_card_selector",
+            default=st.session_state.get("photobooth_active_idx", 0),
+        )
+        if selected_idx is not None and selected_idx != st.session_state.get("photobooth_active_idx"):
+            st.session_state["photobooth_active_idx"] = selected_idx
+            st.session_state["photobooth_adjustments"] = dict(DEFAULT_ADJUSTMENTS)
+            st.session_state.pop("photobooth_cropped", None)
+            st.rerun()
         return
 
-    if st.button("Start countdown", key="start_timer", icon=":material/timer:"):
-        countdown_ph = st.empty()
-        for remaining in range(seconds, 0, -1):
-            countdown_ph.markdown(f"## {remaining}…")
-            time.sleep(1)
-        countdown_ph.markdown("## 📸")
-
-        with ctx.video_processor.lock:
-            frame = ctx.video_processor.latest_frame  # already RGB
-
-        countdown_ph.empty()
-        if frame is not None:
-            _set_raw_image(Image.fromarray(frame))
-            st.toast("Captured! Scroll down to preview and edit.")
-        else:
-            st.warning("No frame captured yet — make sure the camera feed above is running, then try again.")
-
-
-def _render_gesture_capture() -> None:
-    pose_label = st.selectbox("Pose to trigger capture", list(POSE_OPTIONS.keys()), key="gesture_pose_choice")
-    target_pose = POSE_OPTIONS[pose_label]
-    st.caption(f"Hold **{pose_label}** steady for about a second to snap a photo.")
-
-    ctx = webrtc_streamer(
-        key="gesture-photobooth",
-        video_processor_factory=GestureCaptureProcessor,
-        rtc_configuration=RTC_CONFIGURATION,
-        media_stream_constraints={"video": True, "audio": False},
-    )
-
-    if not ctx.video_processor:
-        return
-
-    ctx.video_processor.target_pose = target_pose  # may change between reruns
-
-    with ctx.video_processor.lock:
-        frame = ctx.video_processor.captured_frame
-        detected = ctx.video_processor.detected_pose
-        if frame is not None:
-            ctx.video_processor.captured_frame = None  # consume it
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            _set_raw_image(Image.fromarray(rgb))
-            st.toast("Captured! Scroll down to preview and edit.")
-
-    if detected:
-        st.caption(f"Currently detected: {POSE_LABELS.get(detected, detected)}")
+    active_idx = st.session_state.get("photobooth_active_idx")
+    with st.container(height=180):
+        for idx, shot in enumerate(shots):
+            c1, c2 = st.columns([2, 1], vertical_alignment="center")
+            with c1:
+                st.image(shot, width=THUMB_WIDTH)
+            with c2:
+                if st.button(
+                    "Edit", key=f"pick_shot_{idx}", use_container_width=True,
+                    type="primary" if idx == active_idx else "secondary",
+                ):
+                    st.session_state["photobooth_active_idx"] = idx
+                    st.session_state["photobooth_adjustments"] = dict(DEFAULT_ADJUSTMENTS)
+                    st.session_state.pop("photobooth_cropped", None)
+                    st.rerun()
 
 
-def _render_capture_modes() -> None:
-    mode_options = ["📷 Click to capture"]
+# ---------------------------------------------------------------------------
+# Capture
+# ---------------------------------------------------------------------------
+
+def _render_capture_controls() -> str:
+    mode_options = ["Click", "Upload (test)"]
     if WEBRTC_AVAILABLE:
-        mode_options.append("⏱️ Timer capture")
+        mode_options.insert(1, "Timer")
     if GESTURE_CAPTURE_AVAILABLE:
-        mode_options.append("🖐️ Gesture capture (pose match)")
-    mode_options.append("🧪 Upload (test)")  # temporary — see docstring on _render_upload_capture
+        mode_options.insert(2 if WEBRTC_AVAILABLE else 1, "Gesture")
 
-    mode = st.radio("Capture mode", mode_options, horizontal=True)
+    mode = st.radio("Capture mode", mode_options, horizontal=True, label_visibility="collapsed")
 
     if not WEBRTC_AVAILABLE:
-        st.caption(
-            "⏱️/🖐️ Timer and Gesture capture are disabled — the optional "
-            "`streamlit-webrtc` / `mediapipe` packages aren't installed (or "
-            "failed to import). See requirements-gesture.txt to enable them."
+        st.caption("Timer/Gesture need `streamlit-webrtc`/`mediapipe` — see requirements-gesture.txt.")
+
+    if mode == "Timer":
+        st.session_state["timer_seconds"] = st.select_slider(
+            "Countdown (s)", options=TIMER_OPTIONS, value=st.session_state.get("timer_seconds", 3),
+        )
+    elif mode == "Gesture":
+        st.session_state["gesture_pose_choice"] = st.selectbox(
+            "Trigger pose", list(POSE_OPTIONS.keys()),
+            index=list(POSE_OPTIONS.keys()).index(
+                st.session_state.get("gesture_pose_choice", "🖐️ Open palm")
+            ),
         )
 
-    if mode == "📷 Click to capture":
-        _render_click_capture()
-    elif mode == "⏱️ Timer capture":
-        _render_timer_capture()
-    elif mode == "🖐️ Gesture capture (pose match)":
-        _render_gesture_capture()
+    return mode
+
+
+def _render_capture_widget(mode: str) -> None:
+    if mode == "Click":
+        camera_photo = st.camera_input("Take a photo", label_visibility="collapsed")
+        if camera_photo is not None:
+            sig = camera_photo.file_id if hasattr(camera_photo, "file_id") else camera_photo.name
+            if st.session_state.get("photobooth_click_sig") != sig:
+                st.session_state["photobooth_click_sig"] = sig
+                _add_shot(Image.open(camera_photo))
+
+    elif mode == "Timer":
+        ctx = webrtc_streamer(
+            key="timer-photobooth",
+            video_processor_factory=TimerCaptureProcessor,
+            rtc_configuration=TIMER_RTC_CONFIGURATION,
+            media_stream_constraints={"video": True, "audio": False},
+        )
+        if not ctx.video_processor:
+            st.caption("Waiting for the camera to connect…")
+            return
+        if st.button("Start countdown", key="start_timer", icon=":material/timer:"):
+            countdown_ph = st.empty()
+            seconds = st.session_state.get("timer_seconds", 3)
+            for remaining in range(seconds, 0, -1):
+                countdown_ph.markdown(f"## {remaining}…")
+                time.sleep(1)
+            countdown_ph.markdown("## 📸")
+            with ctx.video_processor.lock:
+                frame = ctx.video_processor.latest_frame
+            countdown_ph.empty()
+            if frame is not None:
+                _add_shot(Image.fromarray(frame))
+                st.toast("Captured! Pick it from the shot list to edit.")
+            else:
+                st.warning("No frame yet — make sure the feed above is running.")
+
+    elif mode == "Gesture":
+        target_pose = POSE_OPTIONS[st.session_state.get("gesture_pose_choice", "🖐️ Open palm")]
+        ctx = webrtc_streamer(
+            key="gesture-photobooth",
+            video_processor_factory=GestureCaptureProcessor,
+            rtc_configuration=RTC_CONFIGURATION,
+            media_stream_constraints={"video": True, "audio": False},
+        )
+        if not ctx.video_processor:
+            return
+        ctx.video_processor.target_pose = target_pose
+        with ctx.video_processor.lock:
+            frame = ctx.video_processor.captured_frame
+            detected = ctx.video_processor.detected_pose
+            if frame is not None:
+                ctx.video_processor.captured_frame = None
+                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                _add_shot(Image.fromarray(rgb))
+                st.toast("Captured! Pick it from the shot list to edit.")
+        if detected:
+            st.caption(f"Detected: {POSE_LABELS.get(detected, detected)}")
+
+    else:  # Upload (test)
+        uploaded = st.file_uploader(
+            "Upload an image", type=["png", "jpg", "jpeg", "webp"],
+            label_visibility="collapsed",
+        )
+        if uploaded is not None:
+            sig = (uploaded.name, uploaded.size)
+            if st.session_state.get("photobooth_upload_sig") != sig:
+                st.session_state["photobooth_upload_sig"] = sig
+                _add_shot(Image.open(uploaded))
+
+
+# ---------------------------------------------------------------------------
+# Crop — streamlit_extras.image_crop, applied to the raw shot before any
+# style/adjustments/frame. Result cached per-shot in session_state so
+# re-running the page doesn't reset the crop on every interaction.
+# ---------------------------------------------------------------------------
+
+def _render_crop(raw: Image.Image) -> Image.Image:
+    if not CROP_AVAILABLE:
+        return raw
+
+    idx = st.session_state.get("photobooth_active_idx", 0)
+    cropped = image_crop(raw, key=f"photobooth_image_crop_{idx}")
+    if cropped is not None:
+        st.session_state["photobooth_cropped"] = cropped
+        return cropped
+    return st.session_state.get("photobooth_cropped", raw)
+
+
+# ---------------------------------------------------------------------------
+# Edit panel — style + frame dropdowns, sliders, short toggle, caption.
+# ---------------------------------------------------------------------------
+
+def _render_edit_controls() -> tuple[str, str, dict, str, bool]:
+    filter_name = st.selectbox("Style", PHOTO_FILTERS)
+    frame_name = st.selectbox("Frame", list(PHOTO_FRAMES.keys()))
+
+    st.caption("Adjust")
+    saved = st.session_state.get("photobooth_adjustments", dict(DEFAULT_ADJUSTMENTS))
+    adjustments = {
+        "brightness": st.slider("Brightness", 0.5, 1.8, saved["brightness"], 0.05),
+        "contrast": st.slider("Contrast", 0.5, 1.8, saved["contrast"], 0.05),
+        "saturation": st.slider("Saturation", 0.0, 2.0, saved["saturation"], 0.05),
+        "sharpness": st.slider("Sharpness", 0.0, 2.0, saved["sharpness"], 0.05),
+        "blur": st.slider("Blur", 0.0, 10.0, saved["blur"], 0.5),
+        "warmth": st.slider("Warmth", -1.0, 1.0, saved["warmth"], 0.05),
+        "vignette": st.slider("Vignette", 0.0, 1.0, saved["vignette"], 0.05),
+    }
+    st.session_state["photobooth_adjustments"] = adjustments
+
+    if st.button("Reset sliders", use_container_width=True, icon=":material/restart_alt:"):
+        st.session_state["photobooth_adjustments"] = dict(DEFAULT_ADJUSTMENTS)
+        st.rerun()
+
+    compare = st.toggle("Compare", value=False) if COMPARISON_AVAILABLE else False
+    caption = st.text_input("Caption")
+
+    return filter_name, frame_name, adjustments, caption, compare
+
+
+def _render_actions(user, edited: Image.Image, filter_name: str, caption: str) -> None:
+    buf = io.BytesIO()
+    edited.convert("RGB").save(buf, format="JPEG", quality=90)
+
+    st.download_button(
+        "Download", data=buf.getvalue(),
+        file_name=f"evol-photobooth-{uuid.uuid4().hex[:8]}.jpg",
+        mime="image/jpeg", icon=":material/download:", use_container_width=True,
+    )
+
+    if user:
+        if st.button("Save to gallery", key="save_photo", icon=":material/save:", use_container_width=True):
+            photos_service.save_photo(user["id"], edited, caption.strip(), filter_name)
+            st.success("Saved!")
     else:
-        _render_upload_capture()
-
-
-def _render_crop(raw_image: Image.Image) -> Image.Image:
-    """Optional crop step. Returns the cropped image, or the original if
-    the cropper package isn't installed or the user hasn't touched the
-    crop box yet."""
-    if not CROPPER_AVAILABLE:
-        return raw_image
-
-    version = st.session_state.get("photobooth_image_version", 0)
-    with st.expander("✂️ Crop", expanded=False):
-        st.caption("Drag the box's edges/corners to crop. Leave it as-is to keep the full photo.")
-        cropped = st_cropper(
-            raw_image,
-            realtime_update=True,
-            box_color="#02ab21",
-            aspect_ratio=None,
-            return_type="image",
-            key=f"photobooth_cropper_{version}",  # forces a fresh box per new photo
+        st.button(
+            "Log in to save", key="save_photo_locked", icon=":material/lock:",
+            use_container_width=True, disabled=True,
+            help="Log in to save photos to a personal gallery.",
         )
-    return cropped if cropped is not None else raw_image
 
 
-def _render_edit_and_export(user) -> None:
-    """Crop, filter, preview/compare, download — all anonymous. Saving to
-    the gallery additionally requires being logged in."""
-    raw_image = st.session_state.get("photobooth_raw_image")
-    if raw_image is None:
-        st.info("Capture or upload a photo to start editing.")
+# ---------------------------------------------------------------------------
+# Right side — images only.
+# ---------------------------------------------------------------------------
+
+def _render_right_panel(mode: str, cropped, edited, compare: bool, filter_name: str) -> None:
+    if cropped is None:
+        _render_capture_widget(mode)
         return
 
-    working_image = _render_crop(raw_image)
-
-    filter_name = st.selectbox("Filter", PHOTO_FILTERS)
-    caption = st.text_input("Caption (optional)")
-
-    filtered = apply_filter(working_image, filter_name)
-
-    if COMPARISON_AVAILABLE:
-        show_compare = st.toggle("Compare before / after", value=(filter_name != "None"))
-    else:
-        show_compare = False
-
-    if show_compare:
-        image_comparison(
-            img1=working_image.convert("RGB"),
-            img2=filtered,
-            label1="Original",
-            label2=filter_name if filter_name != "None" else "Filtered",
+    if compare and COMPARISON_AVAILABLE:
+        image_compare_slider(
+            img1=cropped.convert("RGB"), img2=edited,
+            label1="Original", label2=filter_name if filter_name != "None" else "Edited",
+            key="photobooth_compare_slider",
         )
     else:
-        st.image(filtered, caption="Preview", use_container_width=True)
-
-    buf = io.BytesIO()
-    filtered.convert("RGB").save(buf, format="JPEG", quality=90)
-    download_col, save_col = st.columns(2)
-
-    with download_col:
-        st.download_button(
-            "Download",
-            data=buf.getvalue(),
-            file_name=f"evol-photobooth-{uuid.uuid4().hex[:8]}.jpg",
-            mime="image/jpeg",
-            icon=":material/download:",
-            use_container_width=True,
-        )
-
-    with save_col:
-        if user:
-            if st.button("Save to gallery", key="save_photo", icon=":material/save:", use_container_width=True):
-                photos_service.save_photo(user["id"], filtered, caption.strip(), filter_name)
-                st.session_state["photobooth_raw_image"] = None
-                st.success("Saved!")
-                st.rerun()
-        else:
-            st.button(
-                "Log in to save", key="save_photo_locked", icon=":material/lock:",
-                use_container_width=True, disabled=True,
-                help="Log in (see the Login tab) to save photos to a personal gallery.",
-            )
+        st.image(edited, use_container_width=True)
 
 
 def _render_gallery(user_id: int) -> None:
@@ -285,26 +345,47 @@ def _render_gallery(user_id: int) -> None:
                 st.rerun()
 
 
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
 def render() -> None:
     st.markdown("## :material/photo_camera: Photobooth")
 
     user = st.session_state.get("user")
-    if user:
-        st.caption("Snap a pic — by clicking, on a timer, or with a gesture — crop it, add a filter, compare, download or save it to your gallery.")
-    else:
-        st.caption("Snap a pic, crop, add a filter, and download it — no account needed. Log in (see the Login tab) if you want it saved to a personal gallery too.")
+    st.caption(
+        "Capture, style, and download for free — log in to also save to your gallery."
+        if not user else
+        "Capture, style, crop, compare, download, or save to your gallery."
+    )
 
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        _render_capture_modes()
-    with col2:
-        _render_edit_and_export(user)
+    left, right = st.columns([1, 2.2], gap="medium")
+
+    original = _active_shot()
+
+    with left:
+        mode = _render_capture_controls()
+        _render_shot_picker()
+        st.markdown("---")
+
+        if original is not None:
+            cropped = _render_crop(original)
+            filter_name, frame_name, adjustments, caption, compare = _render_edit_controls()
+            styled = apply_filter(cropped, filter_name)
+            styled = apply_adjustments(styled, adjustments)
+            edited = apply_frame(styled, frame_name)
+        else:
+            cropped, filter_name, edited, caption, compare = None, "None", None, "", False
+
+    with right:
+        _render_right_panel(mode, cropped, edited, compare, filter_name)
+
+    if original is not None:
+        st.markdown("---")
+        _render_actions(user, edited, filter_name, caption)
 
     st.markdown("---")
     if user:
         _render_gallery(user["id"])
     else:
-        st.info(
-            "Log in (see the Login tab) to see and manage a personal photo gallery.",
-            icon=":material/lock:",
-        )
+        st.info("Log in to see and manage a personal photo gallery.", icon=":material/lock:")

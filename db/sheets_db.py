@@ -36,7 +36,7 @@ SCHEMA: dict[str, list[str]] = {
     "blog":   ["id", "content", "time"],
     "places": ["id", "user_id", "name", "lat", "lon", "description", "icon", "time"],
     "photos": ["id", "user_id", "filename", "caption", "filter", "time"],
-    "users":  ["id", "username", "password_hash", "created_at"],
+    "users":  ["id", "username", "password_hash", "name", "role", "created_at"],
     "sessions": ["token", "user_id", "created_at", "expires_at"],  # token is the PK here
     "tracks": ["id", "title", "artist", "video_id", "youtube_url", "thumbnail_url",
                "lyrics_url", "added_by", "created_at"],

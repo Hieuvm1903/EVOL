@@ -13,5 +13,4 @@ gspread
 oauth2client
 pytz
 streamlit-js-eval
-streamlit-cropper
-streamlit-image-comparison
+streamlit-extras
